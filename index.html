@@ -1020,7 +1020,8 @@ function pageExercises(B,T,A){
 }
 
 /* ---- diet ---- */
-const SLOTS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snack']];
+const SLOTS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snack 1'],['snack2','Snack 2']];
+const foodSlot = s => s==='snack2' ? 'snack' : s;
 let dietSlot=null;
 function dietTargets(){ return state.settings.diet || {kcal:2600, protein:140}; }
 function mealsOn(d){ return state.meals.filter(m=>m.date===d).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); }
@@ -1031,13 +1032,14 @@ function pageDiet(B,T,A){
   const h=new Date().getHours(); if(!dietSlot) dietSlot = h<11?'breakfast':h<16?'lunch':h<20?'dinner':'snack';
   const bm=bodyOn(D);
   A.textContent='+ Custom'; A.className='act'; A.onclick=()=>customFood(D, B,T,A);
-  const items=state.foods.filter(f=>f.slot===dietSlot && !f.archived).sort((a,b)=>(b.uses-a.uses)||a.name.localeCompare(b.name));
+  const items=state.foods.filter(f=>f.slot===foodSlot(dietSlot) && !f.archived).sort((a,b)=>(b.uses-a.uses)||a.name.localeCompare(b.name));
   B.innerHTML=`${today?'':`<div class="empty" style="padding:0 0 10px;text-align:left;color:var(--gold)">${new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})}</div>`}
     <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div></div>
     <div class="weigh"><span class="lbl">Weigh-in</span><input id="bwIn" type="number" inputmode="decimal" step="0.1" placeholder="kg" value="${bm&&bm.weight!=null?bm.weight:''}"><span class="lbl">Waist ↑</span><input id="waIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_above!=null?bm.waist_above:''}"><span class="lbl">@</span><input id="wnIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_at!=null?bm.waist_at:''}"><button class="btn sm gold" id="bwSave">Save</button></div>
-    <div class="segs" style="margin-top:14px">${SLOTS.map(([k,l])=>`<button class="${dietSlot===k?'on':''}" data-slot="${k}">${l}</button>`).join('')}</div>
+    <div class="section" style="margin-top:14px"><h4>Logged ${today?'today':''}</h4><div class="list">${ms.map(m=>`<div class="item"><div class="m"><div class="t">${esc(m.item)}${(+m.qty||1)!==1?' × '+m.qty:''}</div><div class="s">${(SLOTS.find(x=>x[0]===m.slot)||['','Meal'])[1]} · ${Math.round(m.kcal*(+m.qty||1))} kcal · ${Math.round(m.protein*(+m.qty||1))} g${m.note?' · '+esc(m.note):''}</div></div><button class="iconbtn" data-mdel="${m.id}" style="color:var(--red)">×</button></div>`).join('')||'<div class="empty">Nothing logged yet.</div>'}</div></div>
+    <div class="segs" style="margin-top:4px">${SLOTS.map(([k,l])=>`<button class="${dietSlot===k?'on':''}" data-slot="${k}">${l}</button>`).join('')}</div>
     <div class="list foods">${items.map(f=>`<div class="item click" data-food="${esc(f.name)}"><div class="m"><div class="t">${esc(f.name)}</div><div class="s">${f.kcal} kcal · ${f.protein} g${f.uses?' · '+f.uses+'×':''}</div></div><span class="plus">+</span></div>`).join('')||'<div class="empty">Nothing here yet. Tap + Custom to add one.</div>'}</div>
-    <div class="section" style="margin-top:18px"><h4>Logged ${today?'today':''}</h4><div class="list">${ms.map(m=>`<div class="item"><div class="m"><div class="t">${esc(m.item)}${(+m.qty||1)!==1?' × '+m.qty:''}</div><div class="s">${SLOTS.find(x=>x[0]===m.slot)[1]} · ${Math.round(m.kcal*(+m.qty||1))} kcal · ${Math.round(m.protein*(+m.qty||1))} g${m.note?' · '+esc(m.note):''}</div></div><button class="iconbtn" data-mdel="${m.id}" style="color:var(--red)">×</button></div>`).join('')||'<div class="empty">Nothing logged yet.</div>'}</div></div>`;
+`;
   $$('#pageBody [data-slot]').forEach(b=>b.onclick=()=>{ dietSlot=b.dataset.slot; pageDiet(B,T,A); });
   $$('#pageBody [data-food]').forEach(el=>el.onclick=()=>{ const f=state.foods.find(x=>x.name===el.dataset.food); logMeal(D, f, 1, null); pageDiet(B,T,A); });
   $$('#pageBody [data-mdel]').forEach(b=>b.onclick=()=>{ const id=b.dataset.mdel; state.meals=state.meals.filter(m=>m.id!==id); persist(); enqueue({t:'meal.delete', id}); pageDiet(B,T,A); });
@@ -1045,14 +1047,14 @@ function pageDiet(B,T,A){
   $$('#pageBody input[type=number]').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); i.onclick=()=>i.select(); });
 }
 function logMeal(D, f, qty, note){
-  const row={id:uid(), date:D, slot:f.slot, item:f.name, kcal:f.kcal, protein:f.protein, qty:qty||1, note:note||null, created_at:new Date().toISOString()};
+  const row={id:uid(), date:D, slot:dietSlot||f.slot, item:f.name, kcal:f.kcal, protein:f.protein, qty:qty||1, note:note||null, created_at:new Date().toISOString()};
   state.meals.push(row); f.uses=(f.uses||0)+1; f.last_used=D; persist();
   enqueue({t:'meal.insert', row}); enqueue({t:'food.upsert', row:{name:f.name, slot:f.slot, kcal:f.kcal, protein:f.protein, uses:f.uses, last_used:D}});
   const ms=mealsOn(D); const k=Math.round(ms.reduce((a,m)=>a+m.kcal*(+m.qty||1),0)); toast(`${f.name} · ${k.toLocaleString()} kcal today`);
 }
 function customFood(D, B,T,A){
   modal('Custom food', `<div class="form"><label>What<input id="cfName" autocapitalize="sentences" placeholder="e.g. Chicken hot pepper + 2 parottas"></label><div class="row"><label>Calories<input id="cfK" type="number" inputmode="numeric"></label><label>Protein g<input id="cfP" type="number" inputmode="numeric"></label></div><div class="row"><label>Meal<select id="cfSlot">${SLOTS.map(([k,l])=>`<option value="${k}" ${dietSlot===k?'selected':''}>${l}</option>`).join('')}</select></label><label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cfSave" checked style="min-height:0;width:20px;height:20px"> keep in my list</label></div></div>`,
-    [{t:'Cancel'},{t:'Log',gold:true,fn:()=>{ const name=$('#cfName').value.trim(); const k=+$('#cfK').value, p=+$('#cfP').value||0; if(!name||!k) return; const slot=$('#cfSlot').value; let f=state.foods.find(x=>x.name===name); if(!f){ f={name, slot, kcal:k, protein:p, uses:0}; if($('#cfSave').checked) state.foods.push(f); } logMeal(D, f, 1, null); if(!$('#cfSave').checked){ /* one-off: still counted in the day, not kept */ } pageDiet(B,T,A); }}]);
+    [{t:'Cancel'},{t:'Log',gold:true,fn:()=>{ const name=$('#cfName').value.trim(); const k=+$('#cfK').value, p=+$('#cfP').value||0; if(!name||!k) return; const slot=$('#cfSlot').value; dietSlot=slot; let f=state.foods.find(x=>x.name===name); if(!f){ f={name, slot:foodSlot(slot), kcal:k, protein:p, uses:0}; if($('#cfSave').checked) state.foods.push(f); } logMeal(D, f, 1, null); if(!$('#cfSave').checked){ /* one-off: still counted in the day, not kept */ } pageDiet(B,T,A); }}]);
   setTimeout(()=>$('#cfName').focus(),100);
 }
 

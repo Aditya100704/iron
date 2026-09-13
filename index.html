@@ -276,6 +276,11 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .vrow .vl{font-size:12px;color:var(--gold);margin-top:6px}
 .vrow .vf{display:flex;gap:6px;align-items:center;margin-top:8px}
 .pad .hint .tg{color:var(--gold);font-weight:600}
+.weigh{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.weigh .lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.weigh input{width:64px;min-width:0;padding:6px 8px;min-height:38px;font-family:var(--mono);text-align:center}
+.foods .item .plus{color:var(--gold);font-size:22px;line-height:1}
+.kv .tile .v.over{color:var(--red)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -309,6 +314,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
   <div class="menu">
     <button data-page="history"><span class="ic">▤</span><span class="t">History</span><span class="s">Every session, every set</span></button>
     <button data-page="charts"><span class="ic">▲</span><span class="t">Progress</span><span class="s">Volume, e1RM, PRs</span></button>
+    <button data-page="diet"><span class="ic">◐</span><span class="t">Diet</span><span class="s">Tap your usuals, weigh-in</span></button>
     <button data-page="volume"><span class="ic">◫</span><span class="t">Volume</span><span class="s">Specialization, recovery, auto sets</span></button>
     <button data-page="coach"><span class="ic">✦</span><span class="t">Coach</span><span class="s">Weekly notes from the coach</span></button>
     <button data-page="photos"><span class="ic">◉</span><span class="t">Photos</span><span class="s">Progress pics, one tap</span></button>
@@ -356,6 +362,7 @@ const state = {
   exercises: LS.get('exercises', []),
   sets: LS.get('sets', []),
   recovery: LS.get('recovery', []), notes: LS.get('notes', []), volume: LS.get('volume', {}),
+  foods: LS.get('foods', []), meals: LS.get('meals', []), body: LS.get('body', []),
   workouts: LS.get('workouts', []),
   plans: LS.get('plans', []),
   settings: LS.get('settings', {mode:'rir', rest:90, restOn:true, swaps:{}, units:{}, extra:{}, setsOv:{}}),
@@ -365,24 +372,29 @@ const state = {
   viewDay: null, photosMeta: [],
 };
 for(const k of ['swaps','units','extra','setsOv','swapsDay','platDismiss','deload','deloadNo','volSeen']) state.settings[k]=state.settings[k]||{};
-const persist = () => { LS.set('exercises',state.exercises); LS.set('sets',state.sets); LS.set('workouts',state.workouts); LS.set('plans',state.plans); LS.set('settings',state.settings); LS.set('queue',state.queue); LS.set('session',state.session); LS.set('lastSync',state.lastSync); LS.set('recovery',state.recovery); LS.set('notes',state.notes); LS.set('volume',state.volume); };
+const persist = () => { LS.set('exercises',state.exercises); LS.set('sets',state.sets); LS.set('workouts',state.workouts); LS.set('plans',state.plans); LS.set('settings',state.settings); LS.set('queue',state.queue); LS.set('session',state.session); LS.set('lastSync',state.lastSync); LS.set('recovery',state.recovery); LS.set('notes',state.notes); LS.set('volume',state.volume); LS.set('foods',state.foods); LS.set('meals',state.meals); LS.set('body',state.body); };
 function setStatus(cls, txt){ const el=$('#status'); el.className='status '+cls; $('#statusTxt').textContent=txt; }
 
 async function fullSync(){
   if(state.syncing) return; state.syncing=true; setStatus('busy','syncing');
   try{
     await flushQueue();
-    const [ex, plans, wo, rec, notes, vol] = await Promise.all([
+    const [ex, plans, wo, rec, notes, vol, foods, meals, body] = await Promise.all([
       api.get("exercises?select=name,muscle,unit,archived&order=name"),
       api.get("plans?select=id,name,data,active&order=updated_at.desc"),
       api.get("workouts?select=id,date,plan_id,day_key,day_name,note,started_at,finished_at&order=date.desc&limit=500"),
       api.get("recovery?select=id,date,workout_id,muscle,status,created_at&order=date.desc&limit=1000"),
       api.get("coach_notes?select=id,created_at,week_start,title,body,read_at&order=created_at.desc&limit=30"),
       api.get("settings?select=key,value&key=eq.volume"),
+      api.get("food_items?select=name,slot,kcal,protein,uses,last_used,archived&order=uses.desc"),
+      api.get("meals?select=id,date,slot,item,kcal,protein,qty,note,created_at&order=date.desc,created_at.asc&limit=1500"),
+      api.get("body_metrics?select=date,weight,waist_above,waist_at,note&order=date.desc&limit=400"),
     ]);
     state.exercises = ex; state.workouts = wo; state.notes = notes;
     const pendingRec=new Set(state.queue.filter(op=>op.t==='rec.insert').map(op=>op.row.id)); state.recovery = rec.concat((state.recovery||[]).filter(r=>pendingRec.has(r.id) && !rec.some(x=>x.id===r.id)));
     if(vol[0] && vol[0].value) state.volume = vol[0].value;
+    const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
+    state.foods = foods; state.body = body;
     if(plans.length) state.plans = plans; else { const p={id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true}; await api.post("plans",[p]); state.plans=[p]; }
     let all=[], from=0; const page=1000;
     while(true){ const r=await api.get(`sets?select=id,date,exercise,muscle,weight,unit,reps,rir,rpe,is_pr,workout_id,set_no,comment,note,rest_s,source,created_at&order=date.asc,created_at.asc`, `${from}-${from+page-1}`); all=all.concat(r); if(r.length<page) break; from+=page; }
@@ -409,6 +421,10 @@ async function flushQueue(){
       else if(op.t==='rec.insert') await api.post('recovery',[op.row]);
       else if(op.t==='note.read') await api.patch('coach_notes','id=eq.'+op.id,{read_at:op.at});
       else if(op.t==='setting.upsert') await api.post('settings',[op.row],'resolution=merge-duplicates,return=minimal');
+      else if(op.t==='meal.insert') await api.post('meals',[op.row]);
+      else if(op.t==='meal.delete') await api.del('meals','id=eq.'+op.id);
+      else if(op.t==='food.upsert') await api.post('food_items',[op.row],'resolution=merge-duplicates,return=minimal');
+      else if(op.t==='body.upsert') await api.post('body_metrics',[op.row],'resolution=merge-duplicates,return=minimal');
     }catch(e){ console.warn('queue op failed', op.t, e); state.queue.push(op); }
   }
   persist();
@@ -851,6 +867,7 @@ function openPage(kind, arg){
   else if(kind==='charts') pageCharts(B,T,A);
   else if(kind==='photos') pagePhotos(B,T,A);
   else if(kind==='volume') pageVolume(B,T,A);
+  else if(kind==='diet') pageDiet(B,T,A);
   else if(kind==='coach') pageCoach(B,T,A);
   else if(kind==='plans') pagePlans(B,T,A);
   else if(kind==='exercises') pageExercises(B,T,A);
@@ -1002,6 +1019,43 @@ function pageExercises(B,T,A){
   $('#exSearch').oninput=e=>{ const q=e.target.value.toLowerCase(); $$('#pageBody [data-ex]').forEach(el=>el.style.display=el.dataset.ex.toLowerCase().includes(q)?'':'none'); };
 }
 
+/* ---- diet ---- */
+const SLOTS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snack']];
+let dietSlot=null;
+function dietTargets(){ return state.settings.diet || {kcal:2600, protein:140}; }
+function mealsOn(d){ return state.meals.filter(m=>m.date===d).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); }
+function bodyOn(d){ return state.body.find(b=>b.date===d)||null; }
+function pageDiet(B,T,A){
+  T.textContent='Diet'; const D=curDate(); const today=D===todayISO(); const tg=dietTargets();
+  const ms=mealsOn(D); const kcal=Math.round(ms.reduce((a,m)=>a+m.kcal*(+m.qty||1),0)); const pro=Math.round(ms.reduce((a,m)=>a+m.protein*(+m.qty||1),0));
+  const h=new Date().getHours(); if(!dietSlot) dietSlot = h<11?'breakfast':h<16?'lunch':h<20?'dinner':'snack';
+  const bm=bodyOn(D);
+  A.textContent='+ Custom'; A.className='act'; A.onclick=()=>customFood(D, B,T,A);
+  const items=state.foods.filter(f=>f.slot===dietSlot && !f.archived).sort((a,b)=>(b.uses-a.uses)||a.name.localeCompare(b.name));
+  B.innerHTML=`${today?'':`<div class="empty" style="padding:0 0 10px;text-align:left;color:var(--gold)">${new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})}</div>`}
+    <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div></div>
+    <div class="weigh"><span class="lbl">Weigh-in</span><input id="bwIn" type="number" inputmode="decimal" step="0.1" placeholder="kg" value="${bm&&bm.weight!=null?bm.weight:''}"><span class="lbl">Waist ↑</span><input id="waIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_above!=null?bm.waist_above:''}"><span class="lbl">@</span><input id="wnIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_at!=null?bm.waist_at:''}"><button class="btn sm gold" id="bwSave">Save</button></div>
+    <div class="segs" style="margin-top:14px">${SLOTS.map(([k,l])=>`<button class="${dietSlot===k?'on':''}" data-slot="${k}">${l}</button>`).join('')}</div>
+    <div class="list foods">${items.map(f=>`<div class="item click" data-food="${esc(f.name)}"><div class="m"><div class="t">${esc(f.name)}</div><div class="s">${f.kcal} kcal · ${f.protein} g${f.uses?' · '+f.uses+'×':''}</div></div><span class="plus">+</span></div>`).join('')||'<div class="empty">Nothing here yet. Tap + Custom to add one.</div>'}</div>
+    <div class="section" style="margin-top:18px"><h4>Logged ${today?'today':''}</h4><div class="list">${ms.map(m=>`<div class="item"><div class="m"><div class="t">${esc(m.item)}${(+m.qty||1)!==1?' × '+m.qty:''}</div><div class="s">${SLOTS.find(x=>x[0]===m.slot)[1]} · ${Math.round(m.kcal*(+m.qty||1))} kcal · ${Math.round(m.protein*(+m.qty||1))} g${m.note?' · '+esc(m.note):''}</div></div><button class="iconbtn" data-mdel="${m.id}" style="color:var(--red)">×</button></div>`).join('')||'<div class="empty">Nothing logged yet.</div>'}</div></div>`;
+  $$('#pageBody [data-slot]').forEach(b=>b.onclick=()=>{ dietSlot=b.dataset.slot; pageDiet(B,T,A); });
+  $$('#pageBody [data-food]').forEach(el=>el.onclick=()=>{ const f=state.foods.find(x=>x.name===el.dataset.food); logMeal(D, f, 1, null); pageDiet(B,T,A); });
+  $$('#pageBody [data-mdel]').forEach(b=>b.onclick=()=>{ const id=b.dataset.mdel; state.meals=state.meals.filter(m=>m.id!==id); persist(); enqueue({t:'meal.delete', id}); pageDiet(B,T,A); });
+  $('#bwSave').onclick=()=>{ const w=$('#bwIn').value===''?null:+$('#bwIn').value; const wa=$('#waIn').value===''?null:+$('#waIn').value; const wn=$('#wnIn').value===''?null:+$('#wnIn').value; if(w==null&&wa==null&&wn==null) return; const row={date:D, weight:w, waist_above:wa, waist_at:wn}; const i=state.body.findIndex(b=>b.date===D); if(i>=0) state.body[i]={...state.body[i],...row}; else state.body.unshift(row); persist(); enqueue({t:'body.upsert', row}); toast(w!=null?`${w} kg saved`:'Saved'); };
+  $$('#pageBody input[type=number]').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); i.onclick=()=>i.select(); });
+}
+function logMeal(D, f, qty, note){
+  const row={id:uid(), date:D, slot:f.slot, item:f.name, kcal:f.kcal, protein:f.protein, qty:qty||1, note:note||null, created_at:new Date().toISOString()};
+  state.meals.push(row); f.uses=(f.uses||0)+1; f.last_used=D; persist();
+  enqueue({t:'meal.insert', row}); enqueue({t:'food.upsert', row:{name:f.name, slot:f.slot, kcal:f.kcal, protein:f.protein, uses:f.uses, last_used:D}});
+  const ms=mealsOn(D); const k=Math.round(ms.reduce((a,m)=>a+m.kcal*(+m.qty||1),0)); toast(`${f.name} · ${k.toLocaleString()} kcal today`);
+}
+function customFood(D, B,T,A){
+  modal('Custom food', `<div class="form"><label>What<input id="cfName" autocapitalize="sentences" placeholder="e.g. Chicken hot pepper + 2 parottas"></label><div class="row"><label>Calories<input id="cfK" type="number" inputmode="numeric"></label><label>Protein g<input id="cfP" type="number" inputmode="numeric"></label></div><div class="row"><label>Meal<select id="cfSlot">${SLOTS.map(([k,l])=>`<option value="${k}" ${dietSlot===k?'selected':''}>${l}</option>`).join('')}</select></label><label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cfSave" checked style="min-height:0;width:20px;height:20px"> keep in my list</label></div></div>`,
+    [{t:'Cancel'},{t:'Log',gold:true,fn:()=>{ const name=$('#cfName').value.trim(); const k=+$('#cfK').value, p=+$('#cfP').value||0; if(!name||!k) return; const slot=$('#cfSlot').value; let f=state.foods.find(x=>x.name===name); if(!f){ f={name, slot, kcal:k, protein:p, uses:0}; if($('#cfSave').checked) state.foods.push(f); } logMeal(D, f, 1, null); if(!$('#cfSave').checked){ /* one-off: still counted in the day, not kept */ } pageDiet(B,T,A); }}]);
+  setTimeout(()=>$('#cfName').focus(),100);
+}
+
 /* ---- volume · specialization ---- */
 function pageVolume(B,T,A){
   T.textContent='Volume'; const plan=activePlan(); const f=focusOf(plan); const wk=weekStartISO(); const V=state.volume||{};
@@ -1036,6 +1090,7 @@ function pageSettings(B,T){
     <div class="section"><h4>Sync</h4><div class="list"><div class="item"><div class="m"><div class="t">${state.online?'Online':'Offline'}</div><div class="s">${state.queue.length} pending · last sync ${state.lastSync?new Date(state.lastSync).toLocaleString():'never'} · ${state.sets.length} sets local</div></div><button class="btn sm" id="syncNow">Sync now</button></div></div></div>
     <div class="section"><h4>Session</h4><div class="list"><div class="item"><div class="m"><div class="t">${state.session?('Open: '+esc(state.session.dayName)+' · '+state.session.date):'No open session'}</div><div class="s">Sessions start on your first set and end at your last. A gap over an hour starts a new one.</div></div>${state.session?'<button class="btn sm red" id="discard">Discard</button>':''}</div></div></div>
     <div class="section"><h4>Today's tweaks</h4><div class="list"><div class="item"><div class="m"><div class="t">${Object.keys(s.swaps).length} swaps · ${Object.keys(s.extra[todayISO()]||{}).reduce((a,k)=>a+(s.extra[todayISO()][k]||[]).length,0)} added exercises · ${Object.keys(s.setsOv[todayISO()]||{}).length} set adjustments</div><div class="s">Swaps stay until reset; added exercises and set adjustments are for today only.</div></div><button class="btn sm" id="resetSwaps">Reset swaps</button></div></div></div>
+    <div class="section"><h4>Diet targets</h4><div class="list"><div class="item"><div class="m"><div class="t">${dietTargets().kcal.toLocaleString()} kcal · ${dietTargets().protein} g protein</div><div class="s">Maintenance now; the coach moves these with the phase.</div></div><button class="btn sm" id="dietEdit">Edit</button></div></div></div>
     <div class="section"><h4>Export</h4><div class="list"><div class="item"><div class="m"><div class="t">Copy everything as JSON</div><div class="s">${state.sets.length} sets, ${state.workouts.length} sessions, ${state.plans.length} plans</div></div><button class="btn sm" id="exportBtn">Copy</button></div></div></div>
     <div class="section"><h4>Access</h4><div class="list"><div class="item"><div class="m"><div class="t">Key on this phone</div><div class="s">Remove it to lock the app here.</div></div><button class="btn sm red" id="lock">Lock</button></div></div></div>`;
   $$('#pageBody [data-mode]').forEach(b=>b.onclick=()=>{ s.mode=b.dataset.mode; persist(); pageSettings(B,T); });
@@ -1045,6 +1100,7 @@ function pageSettings(B,T){
   const d=$('#discard'); if(d) d.onclick=()=>{ if(!confirm('Discard the open session? Logged sets stay in history.')) return; state.session=null; state.viewDay=null; persist(); render(); pageSettings(B,T); };
   $('#resetSwaps').onclick=()=>{ s.swaps={}; persist(); render(); pageSettings(B,T); };
   $('#exportBtn').onclick=async()=>{ const data={exported:new Date().toISOString(),exercises:state.exercises,plans:state.plans,workouts:state.workouts,sets:state.sets.map(({_local,...x})=>x)}; try{ await navigator.clipboard.writeText(JSON.stringify(data)); toast('Copied '+state.sets.length+' sets'); }catch(e){ toast('Clipboard blocked'); } };
+  $('#dietEdit').onclick=()=>{ const t=dietTargets(); modal('Diet targets', `<div class="form"><div class="row"><label>Calories<input id="dtK" type="number" value="${t.kcal}"></label><label>Protein g<input id="dtP" type="number" value="${t.protein}"></label></div></div>`, [{t:'Cancel'},{t:'Save',gold:true,fn:()=>{ s.diet={kcal:+$('#dtK').value||2600, protein:+$('#dtP').value||140}; persist(); pageSettings(B,T); }}]); };
   $('#lock').onclick=()=>{ if(!confirm('Lock IRON on this phone?')) return; try{ localStorage.removeItem('iron.key'); }catch(e){} location.reload(); };
 }
 

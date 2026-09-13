@@ -657,10 +657,10 @@ function render(){
 }
 function goDate(d){ state.viewDate = d===todayISO()?null:d; state.viewDay=null; render(); }
 function fitName(){ const el=$('#dayName'); if(!el) return; let s=46; el.style.fontSize=s+'px'; while(el.scrollWidth>el.clientWidth+1 && s>18){ s-=1; el.style.fontSize=s+'px'; } }
-function centerStrip(){ const st=$('#dateStrip'); const sel=st&&st.querySelector('.sel'); if(sel) st.scrollLeft = sel.offsetLeft - st.clientWidth/2 + sel.offsetWidth/2; }
+function centerStrip(id){ const st=$(id||'#dateStrip'); const sel=st&&st.querySelector('.sel'); if(sel) st.scrollLeft = sel.offsetLeft - st.clientWidth/2 + sel.offsetWidth/2; }
 window.addEventListener('resize', ()=>fitName());
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>fitName());
-function dateStrip(D){
+function dateStrip(D, doneDates){
   // From a week before today to a week after: just M T W T F S S. Outside that window: the date.
   const t=new Date(todayISO()+'T00:00');
   const nearStart=new Date(t); nearStart.setDate(t.getDate()-7);
@@ -668,7 +668,7 @@ function dateStrip(D){
   const start=new Date(t); start.setDate(t.getDate()-((t.getDay()+6)%7)-7*16);
   const end=new Date(t); end.setDate(t.getDate()+28);
   const sel=new Date(D+'T00:00'); if(sel<start){ start.setTime(sel.getTime()); start.setDate(start.getDate()-((start.getDay()+6)%7)); } if(sel>end) end.setTime(sel.getTime());
-  const done=new Set(state.sets.map(s=>s.date));
+  const done=doneDates||new Set(state.sets.map(s=>s.date));
   const L=['M','T','W','T','F','S','S']; const tISO=todayISO(); let first=true; let h='';
   for(let x=new Date(start); x<=end; x.setDate(x.getDate()+1)){
     const iso=isoOf(x); const near=x>=nearStart && x<=nearEnd; const wi=(x.getDay()+6)%7;
@@ -1044,24 +1044,28 @@ function pageExercises(B,T,A){
 /* ---- diet ---- */
 const SLOTS=[['breakfast','Breakfast'],['lunch','Lunch'],['dinner','Dinner'],['snack','Snack 1'],['snack2','Snack 2']];
 const foodSlot = s => s==='snack2' ? 'snack' : s;
-let dietSlot=null;
+let dietSlot=null; let dietDate=null;
 function dietTargets(){ return state.settings.diet || {kcal:2600, protein:140}; }
 function mealsOn(d){ return state.meals.filter(m=>m.date===d).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); }
 function bodyOn(d){ return state.body.find(b=>b.date===d)||null; }
 function pageDiet(B,T,A){
-  T.textContent='Diet'; const D=curDate(); const today=D===todayISO(); const tg=dietTargets();
+  T.textContent='Diet'; if(dietDate===todayISO()) dietDate=null; const D=dietDate||todayISO(); const today=D===todayISO(); const tg=dietTargets();
   const ms=mealsOn(D); const kcal=Math.round(ms.reduce((a,m)=>a+m.kcal*(+m.qty||1),0)); const pro=Math.round(ms.reduce((a,m)=>a+m.protein*(+m.qty||1),0));
   const h=new Date().getHours(); if(!dietSlot) dietSlot = h<11?'breakfast':h<16?'lunch':h<20?'dinner':'snack';
   const bm=bodyOn(D);
   A.textContent='+ Custom'; A.className='act'; A.onclick=()=>customFood(D, B,T,A);
   const items=state.foods.filter(f=>f.slot===foodSlot(dietSlot) && !f.archived).sort((a,b)=>(b.uses-a.uses)||a.name.localeCompare(b.name));
-  B.innerHTML=`${today?'':`<div class="empty" style="padding:0 0 10px;text-align:left;color:var(--gold)">${new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})}</div>`}
+  const logged=new Set(state.meals.map(m=>m.date));
+  B.innerHTML=`<div class="datestrip" id="dietStrip">${dateStrip(D, logged)}</div>
+    ${today?'':`<div class="empty" style="padding:0 0 10px;text-align:left;color:var(--gold)">${new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})} · <a href="#" id="dietToday" style="color:var(--gold)">back to today</a></div>`}
     <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div></div>
     <div class="weigh"><span class="lbl">Weigh-in</span><input id="bwIn" type="number" inputmode="decimal" step="0.1" placeholder="kg" value="${bm&&bm.weight!=null?bm.weight:''}"><span class="lbl">Waist ↑</span><input id="waIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_above!=null?bm.waist_above:''}"><span class="lbl">@</span><input id="wnIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_at!=null?bm.waist_at:''}"><button class="btn sm gold" id="bwSave">Save</button></div>
     <div class="section" style="margin-top:14px"><h4>Logged ${today?'today':''}</h4><div class="list">${ms.map(m=>`<div class="item"><div class="m"><div class="t">${esc(m.item)}${(+m.qty||1)!==1?' × '+m.qty:''}</div><div class="s">${(SLOTS.find(x=>x[0]===m.slot)||['','Meal'])[1]} · ${Math.round(m.kcal*(+m.qty||1))} kcal · ${Math.round(m.protein*(+m.qty||1))} g${m.note?' · '+esc(m.note):''}</div></div><button class="iconbtn" data-mdel="${m.id}" style="color:var(--red)">×</button></div>`).join('')||'<div class="empty">Nothing logged yet.</div>'}</div></div>
     <div class="segs" style="margin-top:4px">${SLOTS.map(([k,l])=>`<button class="${dietSlot===k?'on':''}" data-slot="${k}">${l}</button>`).join('')}</div>
     <div class="list foods">${items.map(f=>`<div class="item click" data-food="${esc(f.name)}"><div class="m"><div class="t">${esc(f.name)}</div><div class="s">${f.kcal} kcal · ${f.protein} g${f.uses?' · '+f.uses+'×':''}</div></div><span class="plus">+</span></div>`).join('')||'<div class="empty">Nothing here yet. Tap + Custom to add one.</div>'}</div>
 `;
+  $$('#dietStrip [data-date]').forEach(b=>b.onclick=()=>{ dietDate=b.dataset.date; pageDiet(B,T,A); }); centerStrip('#dietStrip');
+  const dt=$('#dietToday'); if(dt) dt.onclick=e=>{ e.preventDefault(); dietDate=null; pageDiet(B,T,A); };
   $$('#pageBody [data-slot]').forEach(b=>b.onclick=()=>{ dietSlot=b.dataset.slot; pageDiet(B,T,A); });
   $$('#pageBody [data-food]').forEach(el=>el.onclick=()=>{ const f=state.foods.find(x=>x.name===el.dataset.food); logMeal(D, f, 1, null); pageDiet(B,T,A); });
   $$('#pageBody [data-mdel]').forEach(b=>b.onclick=()=>{ const id=b.dataset.mdel; state.meals=state.meals.filter(m=>m.id!==id); persist(); enqueue({t:'meal.delete', id}); pageDiet(B,T,A); });

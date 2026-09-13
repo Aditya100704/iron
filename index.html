@@ -204,6 +204,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .rest button{color:var(--muted);font-size:22px;width:36px;height:36px}
 .datestrip{position:relative;display:flex;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 calc(-1 * var(--pad)) 14px;padding:2px var(--pad) 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .datestrip::-webkit-scrollbar{display:none}
+.healthline{color:var(--muted);font-size:13px;margin:-6px 0 12px;letter-spacing:.01em}.healthline b{color:var(--text);font-variant-numeric:tabular-nums}.healthline .warn{color:var(--gold)}
 .dchip{flex:none;width:36px;height:40px;border-radius:9px;background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;scroll-snap-align:center;line-height:1}
 .dchip.wk{margin-left:8px}
 .dchip .n{font-size:12px;font-weight:600;color:var(--dim)}
@@ -395,6 +396,7 @@ async function fullSync(){
     if(vol[0] && vol[0].value) state.volume = vol[0].value;
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
+    try{ const [hd,hs]=await Promise.all([api.get('health_daily?select=*&order=date.desc&limit=90'), api.get('health_sessions?select=*&order=start_at.desc&limit=200')]); const H=state.health; hd.forEach(r=>{ H.daily[r.date]=Object.assign(H.daily[r.date]||{}, r); }); hs.forEach(r=>{ H.sessions[r.id]=r; }); LS.set('health',H); }catch(e){ console.warn('health pull',e); }
     if(plans.length) state.plans = plans; else { const p={id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true}; await api.post("plans",[p]); state.plans=[p]; }
     let all=[], from=0; const page=1000;
     while(true){ const r=await api.get(`sets?select=id,date,exercise,muscle,weight,unit,reps,rir,rpe,is_pr,workout_id,set_no,comment,note,rest_s,source,created_at&order=date.asc,created_at.asc`, `${from}-${from+page-1}`); all=all.concat(r); if(r.length<page) break; from+=page; }
@@ -425,6 +427,8 @@ async function flushQueue(){
       else if(op.t==='meal.delete') await api.del('meals','id=eq.'+op.id);
       else if(op.t==='food.upsert') await api.post('food_items',[op.row],'resolution=merge-duplicates,return=minimal');
       else if(op.t==='body.upsert') await api.post('body_metrics',[op.row],'resolution=merge-duplicates,return=minimal');
+      else if(op.t==='health.daily') await api.post('health_daily',op.rows,'resolution=merge-duplicates,return=minimal');
+      else if(op.t==='health.session') await api.post('health_sessions',op.rows,'resolution=merge-duplicates,return=minimal');
     }catch(e){ console.warn('queue op failed', op.t, e); state.queue.push(op); }
   }
   persist();
@@ -580,6 +584,58 @@ function coachCard(){ const n=(state.notes||[]).find(x=>!x.read_at); if(!n) retu
 function volumeCard(){ const V=state.volume||{}; const wk=weekStartISO(); const ch=(V.log||[]).filter(c=>c.week===wk && !c.undone); if(!ch.length || state.settings.volSeen[wk]) return ''; return `<div class="volcard"><div class="k">Volume · this week</div>${ch.map(c=>`<div class="vchg"><b>${esc(c.muscle)} ${c.delta>0?'+':''}${c.delta} set</b><span>${esc(c.why)}</span><button class="btn sm" data-undo="${c.id}">Undo</button></div>`).join('')}<div class="acts"><button class="btn sm gold" id="volOk">OK</button></div></div>`; }
 function deloadCard(){ if(!deloadSuggested()) return ''; return `<div class="volcard"><div class="k">Recovery</div><div class="vchg"><b>Deload suggested</b><span>Three or more of your lifts are flat and your recovery check-ins dipped this week. Half the sets for seven days, same weights.</span></div><div class="acts"><button class="btn sm" id="deloadNo">Not now</button><button class="btn sm gold" id="deloadYes">Deload this week</button></div></div>`; }
 
+/* ================= HEALTH CONNECT (native app only) ================= */
+state.health = LS.get('health', {daily:{}, sessions:{}, lastSync:0, granted:false});
+const isNative = () => !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+const HC = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.HealthConnect) || null;
+const HC_TYPES=['Steps','Distance','ActiveCaloriesBurned','TotalCaloriesBurned','ExerciseSession','SleepSession','HeartRateSeries','RestingHeartRate','HeartRateVariabilityRmssd','OxygenSaturation','Vo2Max','Weight'];
+const EX_KIND={73:'swim',74:'swim',79:'walk',56:'run',57:'run',70:'strength',80:'strength',8:'bike',9:'bike',37:'hike',25:'elliptical',68:'stairs',13:'cardio',36:'hiit',14:'cardio',24:'cardio'};
+const isoLocal = d => { const x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
+async function hcRead(type, start, end){ let recs=[], token; do{ const r=await HC().readRecords({type, timeRangeFilter:{type:'between', startTime:start.toISOString(), endTime:end.toISOString()}, pageSize:1000, pageToken:token}); recs=recs.concat(r.records||[]); token=r.pageToken; }while(token); return recs; }
+async function hcPermissions(ask){
+  const hc=HC(); if(!hc) return false;
+  try{ const a=await hc.checkAvailability(); if(a.availability!=='Available'){ state.health.avail=a.availability; LS.set('health',state.health); return false; } }catch(e){ return false; }
+  try{ let r=await hc.checkHealthPermissions({read:HC_TYPES, write:[]}); if(!r.hasAllPermissions && ask) r=await hc.requestHealthPermissions({read:HC_TYPES, write:[]}); state.health.granted=r.grantedPermissions.length>0; state.health.avail='Available'; LS.set('health',state.health); return state.health.granted; }catch(e){ console.warn('hc perms',e); return false; }
+}
+async function healthSync(days){
+  const hc=HC(); if(!hc) return; if(!(await hcPermissions(true))) return;
+  setStatus('busy','reading Health Connect');
+  const end=new Date(); const start=new Date(); start.setHours(0,0,0,0); start.setDate(start.getDate()-(days||7)); start.setHours(start.getHours()-6);
+  const D={}; const day=(iso)=>D[iso]||(D[iso]={date:iso});
+  const sum=(type, key, pick)=>hcRead(type,start,end).then(rs=>rs.forEach(r=>{ const d=day(isoLocal(r.startTime)); d[key]=(d[key]||0)+pick(r); })).catch(e=>console.warn(type,e));
+  const last=(type, key, pick)=>hcRead(type,start,end).then(rs=>rs.forEach(r=>{ const d=day(isoLocal(r.time)); if(!d['_'+key] || r.time>d['_'+key]){ d['_'+key]=r.time; d[key]=pick(r); } })).catch(e=>console.warn(type,e));
+  const metres=x=>!x?0:(x.unit==='kilometer'?x.value*1000:x.unit==='mile'?x.value*1609.34:x.unit==='feet'?x.value*0.3048:x.value);
+  await sum('Steps','steps',r=>r.count||0);
+  await sum('Distance','distance_m',r=>Math.round(metres(r.distance)));
+  await sum('ActiveCaloriesBurned','active_kcal',r=>Math.round(r.energy?r.energy.value:0));
+  await sum('TotalCaloriesBurned','total_kcal',r=>Math.round(r.energy?r.energy.value:0));
+  await last('RestingHeartRate','resting_hr',r=>Math.round(r.beatsPerMinute));
+  await last('OxygenSaturation','spo2',r=>Math.round(r.percentage.value*10)/10);
+  await last('Vo2Max','vo2max',r=>Math.round(r.vo2MillilitersPerMinuteKilogram*10)/10);
+  await last('Weight','weight',r=>Math.round((r.weight.unit==='pound'?r.weight.value*0.4536:r.weight.unit==='gram'?r.weight.value/1000:r.weight.value)*10)/10);
+  try{ const hrv=await hcRead('HeartRateVariabilityRmssd',start,end); const acc={}; hrv.forEach(r=>{ const k=isoLocal(r.time); (acc[k]||(acc[k]=[])).push(r.heartRateVariabilityMillis); }); Object.keys(acc).forEach(k=>{ day(k).hrv_ms=Math.round(acc[k].reduce((a,b)=>a+b,0)/acc[k].length*10)/10; }); }catch(e){ console.warn('hrv',e); }
+  try{ const sl=await hcRead('SleepSession',start,end); sl.forEach(r=>{ const k=isoLocal(r.endTime); const total=(new Date(r.endTime)-new Date(r.startTime))/60000; const st=(r.stages||[]); const asleep=st.length? st.filter(x=>[2,4,5,6].includes(+x.stage)).reduce((a,x)=>a+(new Date(x.endTime)-new Date(x.startTime))/60000,0) : total; const d=day(k); if(!d.sleep_min || asleep>d.sleep_min){ d.sleep_start=r.startTime; d.sleep_end=r.endTime; d.sleep_min=Math.round(asleep); const agg={}; st.forEach(x=>{ agg[x.stage]=(agg[x.stage]||0)+Math.round((new Date(x.endTime)-new Date(x.startTime))/60000); }); d.sleep_stages=agg; } }); }catch(e){ console.warn('sleep',e); }
+  const S=[];
+  try{ const ex=await hcRead('ExerciseSession',start,end); for(const r of ex){ const row={id:r.metadata.id, date:isoLocal(r.startTime), kind:EX_KIND[r.exerciseType]||'other', exercise_type:r.exerciseType, title:r.title||null, start_at:r.startTime, end_at:r.endTime, duration_min:Math.round((new Date(r.endTime)-new Date(r.startTime))/6000)/10, source:r.metadata.dataOrigin||null};
+      try{ const dist=await hcRead('Distance',new Date(r.startTime),new Date(r.endTime)); row.distance_m=Math.round(dist.reduce((a,x)=>a+metres(x.distance),0))||null; }catch(e){}
+      try{ const cal=await hcRead('ActiveCaloriesBurned',new Date(r.startTime),new Date(r.endTime)); row.kcal=Math.round(cal.reduce((a,x)=>a+(x.energy?x.energy.value:0),0))||null; }catch(e){}
+      try{ const hr=await hcRead('HeartRateSeries',new Date(r.startTime),new Date(r.endTime)); const bpm=hr.flatMap(x=>x.samples||[]).map(x=>+x.beatsPerMinute).filter(Boolean); if(bpm.length){ row.avg_hr=Math.round(bpm.reduce((a,b)=>a+b,0)/bpm.length); row.max_hr=Math.max(...bpm); } }catch(e){}
+      S.push(row); } }catch(e){ console.warn('exercise',e); }
+  const rows=Object.values(D).map(d=>{ const o={}; Object.keys(d).forEach(k=>{ if(k[0]!=='_') o[k]=d[k]; }); o.updated_at=new Date().toISOString(); return o; });
+  const H=state.health; rows.forEach(r=>{ H.daily[r.date]=Object.assign(H.daily[r.date]||{}, r); }); S.forEach(r=>{ H.sessions[r.id]=r; }); H.lastSync=Date.now(); LS.set('health',H);
+  if(rows.length) enqueue({t:'health.daily', rows}); if(S.length) enqueue({t:'health.session', rows:S});
+  setStatus('ok','synced'); render();
+}
+function healthOn(iso){ return state.health.daily[iso]||null; }
+function sessionsOn(iso){ return Object.values(state.health.sessions).filter(s=>s.date===iso).sort((a,b)=>a.start_at.localeCompare(b.start_at)); }
+function healthLine(D){
+  const h=healthOn(D); const ss=sessionsOn(D); if(!h && !ss.length) return '';
+  const bits=[]; if(h&&h.steps) bits.push(`<b>${h.steps.toLocaleString()}</b> steps`);
+  ss.filter(s=>s.kind==='swim').forEach(s=>bits.push(`swim <b>${s.distance_m?s.distance_m+' m':Math.round(s.duration_min)+' min'}</b>`));
+  if(h&&h.sleep_min) bits.push(`sleep <b>${Math.floor(h.sleep_min/60)}h ${String(h.sleep_min%60).padStart(2,'0')}</b>${h.sleep_min<300?' <span class="warn">band?</span>':''}`);
+  if(h&&h.resting_hr) bits.push(`rest HR <b>${h.resting_hr}</b>`);
+  return bits.length?`<div class="healthline">${bits.join(' · ')}</div>`:'';
+}
 /* ================= RENDER: THE DAY ================= */
 let clockT=null;
 function render(){
@@ -598,6 +654,7 @@ function render(){
   <div class="daymeta">${today?'':`<span class="past">${dLabel}</span>`}${deload?'<span class="past">deload week</span>':''}<span><b>${planSlots.length}</b> exercises</span><span><b>${planSlots.reduce((a,s)=>a+plannedSets(s),0)}</b> planned</span><span><b>${ds.length}</b> logged</span>${ds.length?`<span><b>${ton.toLocaleString()}</b> tonnage</span>`:''}${span?`<span class="clock" id="clock">${fmtDur(((liveSess?Date.now():span.last)-span.start)/1000)}</span>`:''}${today?`<button class="recchip ${answered?'on':''}" id="recBtn">${answered?'recovery ✓':'recovery?'}</button>`:''}</div>
   ${metersRow(D)}
   <div class="datestrip" id="dateStrip">${dateStrip(D)}</div>
+  ${healthLine(D)}
   ${today?coachCard()+volumeCard()+deloadCard():''}`;
   let prevOver=0;
   slots.forEach((slot)=>{
@@ -1058,7 +1115,8 @@ function pageDiet(B,T,A){
   const logged=new Set(state.meals.map(m=>m.date));
   B.innerHTML=`<div class="datestrip" id="dietStrip">${dateStrip(D, logged)}</div>
     ${today?'':`<div class="empty" style="padding:0 0 10px;text-align:left;color:var(--gold)">${new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})} · <a href="#" id="dietToday" style="color:var(--gold)">back to today</a></div>`}
-    <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div></div>
+    <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div>${(healthOn(D)&&healthOn(D).steps)?`<div class="tile"><div class="k">Steps</div><div class="v">${healthOn(D).steps.toLocaleString()}</div></div>`:''}</div>
+    ${healthLine(D)}
     <div class="weigh"><span class="lbl">Weigh-in</span><input id="bwIn" type="number" inputmode="decimal" step="0.1" placeholder="kg" value="${bm&&bm.weight!=null?bm.weight:''}"><span class="lbl">Waist ↑</span><input id="waIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_above!=null?bm.waist_above:''}"><span class="lbl">@</span><input id="wnIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_at!=null?bm.waist_at:''}"><button class="btn sm gold" id="bwSave">Save</button></div>
     <div class="section" style="margin-top:14px"><h4>Logged ${today?'today':''}</h4><div class="list">${ms.map(m=>`<div class="item"><div class="m"><div class="t">${esc(m.item)}${(+m.qty||1)!==1?' × '+m.qty:''}</div><div class="s">${(SLOTS.find(x=>x[0]===m.slot)||['','Meal'])[1]} · ${Math.round(m.kcal*(+m.qty||1))} kcal · ${Math.round(m.protein*(+m.qty||1))} g${m.note?' · '+esc(m.note):''}</div></div><button class="iconbtn" data-mdel="${m.id}" style="color:var(--red)">×</button></div>`).join('')||'<div class="empty">Nothing logged yet.</div>'}</div></div>
     <div class="segs" style="margin-top:4px">${SLOTS.map(([k,l])=>`<button class="${dietSlot===k?'on':''}" data-slot="${k}">${l}</button>`).join('')}</div>
@@ -1115,6 +1173,7 @@ function pageSettings(B,T){
   T.textContent='Settings'; const s=state.settings;
   B.innerHTML=`<div class="section"><h4>Effort scale</h4><div class="segs"><button class="${(s.mode||'rir')==='rir'?'on':''}" data-mode="rir">RIR (reps in reserve)</button><button class="${s.mode==='rpe'?'on':''}" data-mode="rpe">RPE (6–10)</button></div><div class="empty" style="text-align:left;padding:0 0 10px">Optional on every set. Both are stored; the other is derived (RPE = 10 − RIR).</div></div>
     <div class="section"><h4>Rest timer</h4><div class="segs"><button class="${s.restOn?'on':''}" data-rest="on">On</button><button class="${!s.restOn?'on':''}" data-rest="off">Off</button></div><div class="segs">${[60,90,120,150,180,240].map(v=>`<button class="${(s.rest||90)===v?'on':''}" data-restsec="${v}">${v}s</button>`).join('')}</div><div class="empty" style="text-align:left;padding:0 0 10px">Actual rest between sets is always recorded from the clock, timer or not.</div></div>
+    ${isNative()?`<div class="section"><h4>Health Connect</h4><div class="empty" style="text-align:left;padding:0 0 8px">${state.health.avail==='NotInstalled'?'Health Connect is not installed on this phone.':state.health.avail==='NotSupported'?'This phone does not support Health Connect.':state.health.granted?'Connected. Steps, workouts, sleep, heart rate and weight are read every time the app opens.':'Not connected yet.'}${state.health.lastSync?' Last read '+new Date(state.health.lastSync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'.':''}</div><div class="segs"><button id="hcSync">Read now (30 days)</button><button id="hcOpen">Open Health Connect</button></div></div>`:''}
     <div class="section"><h4>Alerts</h4><div class="empty" style="text-align:left;padding:0 0 8px">When the rest timer ends.</div>
       <div class="segs">${Object.keys(VIB).map(k=>`<button class="${alertSettings().pattern===k?'on':''}" data-vib="${k}">${k}</button>`).join('')}</div>
       <div class="empty" style="text-align:left;padding:0 0 4px">Rest sound:</div>
@@ -1137,6 +1196,8 @@ function pageSettings(B,T){
   const setA=patch=>{ s.alerts={...alertSettings(),...patch}; persist(); pageSettings(B,T); };
   $$('#pageBody [data-vib]').forEach(b=>b.onclick=()=>{ setA({pattern:b.dataset.vib}); buzz(b.dataset.vib); });
   $$('#pageBody [data-prv]').forEach(b=>b.onclick=()=>{ setA({pr:b.dataset.prv}); buzz(b.dataset.prv); });
+  const hs=$('#hcSync'); if(hs) hs.onclick=()=>healthSync(30).then(()=>{ toast('Health Connect read'); pageSettings(B,T); }).catch(e=>toast('Read failed: '+(e.message||e)));
+  const ho=$('#hcOpen'); if(ho) ho.onclick=()=>{ const hc=HC(); if(hc) hc.openHealthConnectSetting(); };
   $$('#pageBody [data-rsnd]').forEach(b=>b.onclick=()=>{ setA({restSound:b.dataset.rsnd}); play(b.dataset.rsnd); });
   $$('#pageBody [data-psnd]').forEach(b=>b.onclick=()=>{ setA({prSound:b.dataset.psnd}); play(b.dataset.psnd); });
   $('#prTest').onclick=()=>firePR();
@@ -1164,9 +1225,10 @@ if(!CFG.key){
   $('#fab').classList.add('hidden'); setStatus('off','locked');
 } else {
   render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline');
-  fullSync();
+  fullSync().then(()=>{ if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
-if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 </script>
 </body>
 </html>

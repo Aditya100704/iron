@@ -593,7 +593,7 @@ const HC = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.HealthCon
 const HC_TYPES=['Steps','Distance','ActiveCaloriesBurned','TotalCaloriesBurned','ExerciseSession','SleepSession','HeartRateSeries','RestingHeartRate','HeartRateVariabilityRmssd','OxygenSaturation','Vo2Max','Weight'];
 const EX_KIND={73:'swim',74:'swim',79:'walk',56:'run',57:'run',70:'strength',80:'strength',8:'bike',9:'bike',37:'hike',25:'elliptical',68:'stairs',13:'cardio',36:'hiit',14:'cardio',24:'cardio'};
 const isoLocal = d => { const x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
-async function hcRead(type, start, end, quiet){ let recs=[], token; do{ const r=await HC().readRecords({type, timeRangeFilter:{type:'between', startTime:start.toISOString(), endTime:end.toISOString()}, pageSize:1000, pageToken:token}); recs=recs.concat(r.records||[]); token=r.pageToken; }while(token); if(!quiet){ const st=state.health.stats||(state.health.stats={}); const o={}; recs.forEach(r=>{ const k=(r.metadata&&r.metadata.dataOrigin)||'?'; o[k]=(o[k]||0)+1; }); st[type]={n:recs.length, origins:o}; } return recs; }
+async function hcRead(type, start, end, quiet){ let recs=[], token; do{ const r=await HC().readRecords({type, timeRangeFilter:{type:'between', startTime:start.toISOString(), endTime:end.toISOString()}, pageSize:1000, pageToken:token}); recs=recs.concat(r.records||[]); token=r.pageToken; }while(token); if(!quiet){ const st=state.health.stats||(state.health.stats={}); const o={}; recs.forEach(r=>{ const k=(r.metadata&&r.metadata.dataOrigin)||'?'; o[k]=(o[k]||0)+1; }); st[type]={n:recs.length, origins:o}; if(type==='Steps'){ const bd={}; recs.forEach(r=>{ const d=isoLocal(r.startTime); const k=(r.metadata&&r.metadata.dataOrigin)||'?'; (bd[d]||(bd[d]={}))[k]=((bd[d]||{})[k]||0)+(r.count||0); }); st[type].byDay=bd; } } return recs; }
 async function hcPermissions(ask){
   const hc=HC(); if(!hc) return false;
   try{ const a=await hc.checkAvailability(); if(a.availability!=='Available'){ state.health.avail=a.availability; LS.set('health',state.health); return false; } }catch(e){ return false; }
@@ -626,6 +626,7 @@ async function healthSync(days){
   const rows=Object.values(D).map(d=>{ const o={}; Object.keys(d).forEach(k=>{ if(k[0]!=='_') o[k]=d[k]; }); o.updated_at=new Date().toISOString(); return o; });
   const H=state.health; rows.forEach(r=>{ H.daily[r.date]=Object.assign(H.daily[r.date]||{}, r); }); S.forEach(r=>{ H.sessions[r.id]=r; }); H.lastSync=Date.now(); LS.set('health',H);
   if(rows.length) enqueue({t:'health.daily', rows}); if(S.length) enqueue({t:'health.session', rows:S});
+  enqueue({t:'setting.upsert', row:{key:'health_stats', value:{at:new Date().toISOString(), days:days||7, granted:H.grantedList||[], avail:H.avail, stats:H.stats}}});
   setStatus('ok','synced'); render();
 }
 function healthOn(iso){ return state.health.daily[iso]||null; }

@@ -718,7 +718,7 @@ function swapSheet(slot, day){
     $$('#modalBody [data-def]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const n=b.dataset.def; setDefault(slot,n); toast(n+' is now the default'); draw(); render(); });
     const any=$('#swapAny'); if(any) any.onchange=()=>{ if(any.value){ addAlt(slot, any.value); setSwapToday(slot,any.value); closeModal(); render(); } };
   };
-  modal('Swap · '+slot.muscle, '', [{t:'+ Add exercise', keep:true, fn:()=>pickExercise({title:'Add a '+slot.muscle+' option', muscle:slot.muscle, onPick:name=>{ addAlt(slot,name); setSwapToday(slot,name); render(); }})},{t:'Close'}]);
+  modal('Swap · '+slot.muscle, '', [{t:'New', keep:true, fn:()=>newExerciseModal(name=>{ addAlt(slot,name); setSwapToday(slot,name); render(); }, slot.muscle)},{t:'+ Add existing', keep:true, fn:()=>pickExercise({title:'Add a '+slot.muscle+' option', muscle:slot.muscle, onPick:name=>{ addAlt(slot,name); setSwapToday(slot,name); render(); }})},{t:'Close'}]);
   draw();
 }
 function platSheet(slot, day){

@@ -510,7 +510,7 @@ function trendUp(name){ const b=sessionBests(name, exUnit(name), 2); return b.le
 function platActive(name){ const p=plateauOf(name); if(!p) return null; return state.settings.platDismiss[name]===p.last ? null : p; }
 
 /* ================= VOLUME · specialization ================= */
-function hardSetsWeek(muscle, wk){ const end=addDaysISO(wk,7); return state.sets.filter(s=>s.muscle===muscle && s.date>=wk && s.date<end && +s.reps>0 && (s.rir==null || +s.rir<=3)).length; }
+function hardSetsWeek(muscle, wk){ const end=addDaysISO(wk,7); return state.sets.filter(s=>s.muscle===muscle && s.date>=wk && s.date<end && +s.reps>0 && s.rir!=null && +s.rir<=3).length; }
 function plannedWeekly(plan, muscle){ return plan.data.days.reduce((a,d)=>a+d.slots.reduce((b,s,i)=>b+(s.muscle===muscle?Math.max(1,(s.sets||3)+volAdj(d.key+':'+i)):0),0),0); }
 function pickSlot(plan, muscle, delta){
   let best=null;
@@ -667,7 +667,7 @@ function setSetsOv(slot, n){ const d=curDate(); state.settings.setsOv[d]=state.s
 function adjustSets(slot){ const cur=plannedSets(slot); modal('Planned sets · this day', `<div style="display:flex;align-items:center;justify-content:center;gap:18px;padding:10px 0"><button class="btn" id="sm">−</button><div class="num" style="font-family:var(--display);font-size:56px;min-width:60px;text-align:center" id="sv">${cur}</div><button class="btn" id="sp">+</button></div><div class="empty" style="padding:0 0 6px">Only changes this day. The plan itself stays ${slot.sets||3}.</div>`, [{t:'Done',gold:true}]); let v=cur; const up=()=>{$('#sv').textContent=v; setSetsOv(slot,v); render();}; $('#sm').onclick=()=>{v=Math.max(1,v-1);up();}; $('#sp').onclick=()=>{v=Math.min(12,v+1);up();}; }
 
 /* ================= RECOVERY CHECK-IN ================= */
-function recoverySheet(day, auto){
+function recoverySheet(day, auto, onDone){
   const D=curDate(); const muscles=[...new Set(day.slots.map(s=>s.muscle))];
   const pick={}; muscles.forEach(m=>{ pick[m]=recoveryFor(D,m); });
   const opts=[['full','Fully'],['partial','Partly'],['not','Not']];
@@ -675,7 +675,7 @@ function recoverySheet(day, auto){
     $('#modalBody').innerHTML=`<div class="empty" style="padding:0 0 12px;text-align:left">How recovered is each muscle you're training today? It sets today's targets and next week's volume.</div>${muscles.map(m=>`<div class="recrow"><span class="rm">${esc(m)}</span><div class="chips">${opts.map(([v,l])=>`<button class="chip ${v} ${pick[m]===v?'on':''}" data-m="${esc(m)}" data-v="${v}">${l}</button>`).join('')}</div></div>`).join('')}`;
     $$('#modalBody [data-v]').forEach(b=>b.onclick=()=>{ pick[b.dataset.m]=b.dataset.v; draw(); });
   };
-  modal(auto?'First set in · recovery?':'Recovery check', '', [{t:'Skip'},{t:'Save',gold:true,fn:()=>{
+  modal(auto?'New session · how recovered are you?':'Recovery check', '', [{t:'Skip', fn:()=>{ state.settings.recSkip=curDate(); persist(); onDone&&onDone(); }},{t:'Save',gold:true,fn:()=>{ onDone&&setTimeout(onDone,80);
     const s=ensureSession(day);
     const rows=muscles.filter(m=>pick[m] && pick[m]!==recoveryFor(D,m)).map(m=>({id:uid(), date:D, workout_id:s.workoutId, muscle:m, status:pick[m], created_at:new Date().toISOString()}));
     if(!rows.length) return;
@@ -752,6 +752,7 @@ function padTarget(){ const D=curDate(); const mine=daySets(D).filter(s=>s.exerc
 function openPad(day, slot){
   if(!slot) return;
   const D=curDate(); const name=slotExercise(slot); const unit=exUnit(name);
+  if(D===todayISO()){ const lastSet=sessionSets().slice(-1)[0]; const fresh=!lastSet || (Date.now()-new Date(lastSet.created_at).getTime())>=SESSION_GAP; const muscles=[...new Set(day.slots.map(x=>x.muscle))]; if(fresh && state.settings.recSkip!==D && !muscles.every(m=>recoveryFor(D,m))){ recoverySheet(day,true,()=>openPad(day,slot)); return; } }
   pad={day, slot, name, unit, rir:null, rpe:null, wStep:5, target:null, why:''};
   const mine=daySets(D).filter(s=>s.exercise===name); const lastMine=mine[mine.length-1];
   padTarget(); const ts=pad.target;
@@ -812,8 +813,6 @@ $('#padLog').onclick=()=>{
   toast(lbl?`${lbl} · ${pad.name}`:`Set ${row.set_no} logged${hit?' · target hit':''}${today?'':' · '+D.slice(5)}`, is_pr||hit);
   if(today && state.settings.restOn) startRest(state.settings.rest||90);
   $('#pad').classList.remove('open'); document.activeElement&&document.activeElement.blur(); render();
-  const muscles=[...new Set(pad.day.slots.map(s=>s.muscle))];
-  if(today && sessionSets().length===1 && !muscles.every(m=>recoveryFor(D,m))){ const d=pad.day; setTimeout(()=>recoverySheet(d,true),300); }
 }
 function setDetail(id){
   const s=state.sets.find(x=>x.id===id); if(!s) return;
@@ -1008,7 +1007,7 @@ function pageVolume(B,T,A){
   T.textContent='Volume'; const plan=activePlan(); const f=focusOf(plan); const wk=weekStartISO(); const V=state.volume||{};
   const muscles=[...new Set([...Object.keys(f), ...plan.data.days.flatMap(d=>d.slots.map(s=>s.muscle))])];
   const weeks=[3,2,1,0].map(i=>addDaysISO(wk,-7*i)); const since=addDaysISO(wk,-14);
-  B.innerHTML = `<div class="empty" style="padding:0 0 14px;text-align:left">Hard sets per week, counting sets at RIR 3 or closer (or with no RIR logged). Every Monday a <b>focus</b> muscle gains a set if it was fully recovered at every session and nothing stalled. Any muscle loses a set after one “not recovered” or two “partly”.</div>
+  B.innerHTML = `<div class="empty" style="padding:0 0 14px;text-align:left">Hard sets per week: only sets logged at RIR 3 or closer count. A set with no RIR is not counted as hard. Every Monday a <b>focus</b> muscle gains a set if it was fully recovered at every session and nothing stalled. Any muscle loses a set after one “not recovered” or two “partly”.</div>
   ${muscles.map(m=>{ const isF=f[m]!=null; const counts=weeks.map(w=>hardSetsWeek(m,w)); const mx=Math.max(1,...counts,f[m]||0); const planned=plannedWeekly(plan,m);
     const rec=(state.recovery||[]).filter(r=>r.muscle===m && r.date>=since); const tally=['full','partial','not'].map(v=>rec.filter(r=>r.status===v).length);
     const rirs=state.sets.filter(s=>s.muscle===m && s.date>=since && s.rir!=null).map(s=>+s.rir); const avgRir=rirs.length?(rirs.reduce((a,b)=>a+b,0)/rirs.length).toFixed(1):'—';

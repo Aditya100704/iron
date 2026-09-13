@@ -1,5 +1,5 @@
 // IRON service worker — app shell cache-first, API network-only.
-const V = 'iron-v12';
+const V = 'iron-v13';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
@@ -12,3 +12,5 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(e.request, {ignoreSearch: true}))
   );
 });
+
+self.addEventListener('notificationclick', e => { e.notification.close(); e.waitUntil(self.clients.matchAll({type:'window'}).then(cs => { const c = cs.find(x => 'focus' in x); return c ? c.focus() : self.clients.openWindow('./'); })); });

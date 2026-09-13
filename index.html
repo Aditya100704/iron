@@ -823,7 +823,7 @@ $('#padLog').onclick=()=>{
   const note=$('#padNote').value.trim()||null; const tg=pad.target;
   const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:null, note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
   state.sets.push({...row,_local:true}); persist(); enqueue({t:'set.insert', row});
-  if(navigator.vibrate) navigator.vibrate(is_pr?[30,40,30]:15);
+  if(is_pr) buzz(alertSettings().pr); else if(navigator.vibrate) navigator.vibrate(15);
   const hit = tg && w>=tg.w && r>=tg.r;
   const lbl={e1rm:'PR · e1RM '+e1rm(w,r), weight:'PR · heaviest ever', reps:'PR · most reps at '+fmtW(w)+pad.unit, first:'First time logged'}[kind];
   toast(lbl?`${lbl} · ${pad.name}`:`Set ${row.set_no} logged${hit?' · target hit':''}${today?'':' · '+D.slice(5)}`, is_pr||hit);
@@ -842,9 +842,18 @@ function setDetail(id){
   $$('#modal input[type=number]').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); i.onclick=()=>i.select(); });
 }
 
+/* alerts: vibration patterns, beep, system notification */
+const VIB={buzz:[120], double:[80,60,80], long:[400], heartbeat:[60,40,60,180,60,40,60], triple:[70,50,70,50,70], off:[]};
+function alertSettings(){ return Object.assign({pattern:'double', pr:'heartbeat', sound:true, notify:false}, state.settings.alerts||{}); }
+function buzz(name){ const p=VIB[name]||[]; if(p.length && navigator.vibrate) navigator.vibrate(p); }
+function beep(){ try{ const A=window.AudioContext||window.webkitAudioContext; const c=beep.ctx||(beep.ctx=new A()); const t=c.currentTime; [0,.18].forEach(d=>{ const o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=880; g.gain.setValueAtTime(0,t+d); g.gain.linearRampToValueAtTime(.25,t+d+.02); g.gain.exponentialRampToValueAtTime(.001,t+d+.15); o.connect(g).connect(c.destination); o.start(t+d); o.stop(t+d+.16); }); }catch(e){} }
+async function notify(title, body, tag){ const a=alertSettings(); if(!a.notify || !('Notification' in window) || Notification.permission!=='granted') return; try{ const reg=await navigator.serviceWorker.ready; reg.showNotification(title, {body, tag, vibrate:VIB[a.pattern]||[], silent:!a.sound, icon:document.querySelector('link[rel=icon]').href}); }catch(e){ try{ new Notification(title,{body,tag}); }catch(_){} } }
+function fireRestAlert(){ const a=alertSettings(); buzz(a.pattern); if(a.sound) beep(); notify('Rest over','Next set.','rest'); }
+async function askNotify(){ if(!('Notification' in window)) return 'unsupported'; const r=await Notification.requestPermission(); return r; }
+
 /* rest timer */
 let restT=null;
-function startRest(sec){ stopRest(); const el=document.createElement('div'); el.className='rest'; el.id='restEl'; el.innerHTML=`<div><div class="lbl">Rest</div><div class="t" id="restTxt">${sec}</div></div><div class="bar"><i id="restBar"></i></div><button id="restX">×</button>`; document.body.appendChild(el); const t0=Date.now(); $('#restX').onclick=stopRest; restT=setInterval(()=>{ const left=Math.max(0,sec-Math.floor((Date.now()-t0)/1000)); const m=Math.floor(left/60), s=left%60; $('#restTxt').textContent=m?`${m}:${String(s).padStart(2,'0')}`:String(s); $('#restBar').style.width=(100*(1-left/sec))+'%'; if(left<=0){ stopRest(); if(navigator.vibrate) navigator.vibrate([80,60,80]); toast('Rest over'); } },250); }
+function startRest(sec){ stopRest(); const el=document.createElement('div'); el.className='rest'; el.id='restEl'; el.innerHTML=`<div><div class="lbl">Rest</div><div class="t" id="restTxt">${sec}</div></div><div class="bar"><i id="restBar"></i></div><button id="restX">×</button>`; document.body.appendChild(el); const t0=Date.now(); $('#restX').onclick=stopRest; restT=setInterval(()=>{ const left=Math.max(0,sec-Math.floor((Date.now()-t0)/1000)); const m=Math.floor(left/60), s=left%60; $('#restTxt').textContent=m?`${m}:${String(s).padStart(2,'0')}`:String(s); $('#restBar').style.width=(100*(1-left/sec))+'%'; if(left<=0){ stopRest(); fireRestAlert(); toast('Rest over'); } },250); }
 function stopRest(){ clearInterval(restT); restT=null; const el=$('#restEl'); if(el) el.remove(); }
 
 function noteModal(name, day){
@@ -1089,6 +1098,12 @@ function pageSettings(B,T){
   T.textContent='Settings'; const s=state.settings;
   B.innerHTML=`<div class="section"><h4>Effort scale</h4><div class="segs"><button class="${(s.mode||'rir')==='rir'?'on':''}" data-mode="rir">RIR (reps in reserve)</button><button class="${s.mode==='rpe'?'on':''}" data-mode="rpe">RPE (6–10)</button></div><div class="empty" style="text-align:left;padding:0 0 10px">Optional on every set. Both are stored; the other is derived (RPE = 10 − RIR).</div></div>
     <div class="section"><h4>Rest timer</h4><div class="segs"><button class="${s.restOn?'on':''}" data-rest="on">On</button><button class="${!s.restOn?'on':''}" data-rest="off">Off</button></div><div class="segs">${[60,90,120,150,180,240].map(v=>`<button class="${(s.rest||90)===v?'on':''}" data-restsec="${v}">${v}s</button>`).join('')}</div><div class="empty" style="text-align:left;padding:0 0 10px">Actual rest between sets is always recorded from the clock, timer or not.</div></div>
+    <div class="section"><h4>Alerts</h4><div class="empty" style="text-align:left;padding:0 0 8px">When the rest timer ends.</div>
+      <div class="segs">${Object.keys(VIB).map(k=>`<button class="${alertSettings().pattern===k?'on':''}" data-vib="${k}">${k}</button>`).join('')}</div>
+      <div class="segs"><button class="${alertSettings().sound?'on':''}" data-snd="1">Beep on</button><button class="${!alertSettings().sound?'on':''}" data-snd="0">Beep off</button><button class="${alertSettings().notify?'on':''}" data-ntf="1">Notification on</button><button class="${!alertSettings().notify?'on':''}" data-ntf="0">Notification off</button><button id="alertTest">Test</button></div>
+      <div class="empty" style="text-align:left;padding:0 0 4px">PR buzz:</div>
+      <div class="segs">${Object.keys(VIB).map(k=>`<button class="${alertSettings().pr===k?'on':''}" data-prv="${k}">${k}</button>`).join('')}</div>
+      <div class="empty" style="text-align:left;padding:0 0 10px">Notifications let the alert reach you when the screen is off or you're in another app. ${('Notification' in window)?'Permission: '+Notification.permission:'Not supported on this browser.'}</div></div>
     <div class="section"><h4>Sync</h4><div class="list"><div class="item"><div class="m"><div class="t">${state.online?'Online':'Offline'}</div><div class="s">${state.queue.length} pending · last sync ${state.lastSync?new Date(state.lastSync).toLocaleString():'never'} · ${state.sets.length} sets local</div></div><button class="btn sm" id="syncNow">Sync now</button></div></div></div>
     <div class="section"><h4>Session</h4><div class="list"><div class="item"><div class="m"><div class="t">${state.session?('Open: '+esc(state.session.dayName)+' · '+state.session.date):'No open session'}</div><div class="s">Sessions start on your first set and end at your last. A gap over an hour starts a new one.</div></div>${state.session?'<button class="btn sm red" id="discard">Discard</button>':''}</div></div></div>
     <div class="section"><h4>Today's tweaks</h4><div class="list"><div class="item"><div class="m"><div class="t">${Object.keys(s.swaps).length} swaps · ${Object.keys(s.extra[todayISO()]||{}).reduce((a,k)=>a+(s.extra[todayISO()][k]||[]).length,0)} added exercises · ${Object.keys(s.setsOv[todayISO()]||{}).length} set adjustments</div><div class="s">Swaps stay until reset; added exercises and set adjustments are for today only.</div></div><button class="btn sm" id="resetSwaps">Reset swaps</button></div></div></div>
@@ -1098,6 +1113,12 @@ function pageSettings(B,T){
   $$('#pageBody [data-mode]').forEach(b=>b.onclick=()=>{ s.mode=b.dataset.mode; persist(); pageSettings(B,T); });
   $$('#pageBody [data-rest]').forEach(b=>b.onclick=()=>{ s.restOn=b.dataset.rest==='on'; persist(); pageSettings(B,T); });
   $$('#pageBody [data-restsec]').forEach(b=>b.onclick=()=>{ s.rest=+b.dataset.restsec; persist(); pageSettings(B,T); });
+  const setA=patch=>{ s.alerts={...alertSettings(),...patch}; persist(); pageSettings(B,T); };
+  $$('#pageBody [data-vib]').forEach(b=>b.onclick=()=>{ setA({pattern:b.dataset.vib}); buzz(b.dataset.vib); });
+  $$('#pageBody [data-prv]').forEach(b=>b.onclick=()=>{ setA({pr:b.dataset.prv}); buzz(b.dataset.prv); });
+  $$('#pageBody [data-snd]').forEach(b=>b.onclick=()=>{ setA({sound:b.dataset.snd==='1'}); if(b.dataset.snd==='1') beep(); });
+  $$('#pageBody [data-ntf]').forEach(b=>b.onclick=async()=>{ if(b.dataset.ntf==='1'){ const r=await askNotify(); if(r!=='granted'){ toast(r==='unsupported'?'Not supported here':'Permission not given'); setA({notify:false}); return; } } setA({notify:b.dataset.ntf==='1'}); });
+  $('#alertTest').onclick=()=>fireRestAlert();
   $('#syncNow').onclick=()=>fullSync().then(()=>pageSettings(B,T));
   const d=$('#discard'); if(d) d.onclick=()=>{ if(!confirm('Discard the open session? Logged sets stay in history.')) return; state.session=null; state.viewDay=null; persist(); render(); pageSettings(B,T); };
   $('#resetSwaps').onclick=()=>{ s.swaps={}; persist(); render(); pageSettings(B,T); };

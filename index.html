@@ -306,7 +306,7 @@ async function fullSync(){
     let all=[], from=0; const page=1000;
     while(true){ const r=await api.get(`sets?select=id,date,exercise,muscle,weight,unit,reps,rir,rpe,is_pr,workout_id,set_no,comment,note,rest_s,source,created_at&order=date.asc,created_at.asc`, `${from}-${from+page-1}`); all=all.concat(r); if(r.length<page) break; from+=page; }
     const ids=new Set(all.map(s=>s.id)); state.sets = all.concat(state.sets.filter(s=>s._local && !ids.has(s.id)));
-    state.lastSync = Date.now(); persist(); setStatus('ok','synced');
+    state.lastSync = Date.now(); if(!state.session){ const w=[...state.workouts].filter(x=>x.date===todayISO()).sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''))[0]; if(w && !w.finished_at){ let notes={}; try{ notes=w.note?JSON.parse(w.note):{}; }catch(e){} state.session={workoutId:w.id,date:w.date,dayKey:w.day_key,dayName:w.day_name,planId:w.plan_id,notes,startedAt:w.started_at}; state.viewDay=null; } } persist(); setStatus('ok','synced');
   }catch(e){ console.warn(e); setStatus('off', state.online?'sync failed':'offline'); }
   state.syncing=false; render();
 }
@@ -338,7 +338,7 @@ const activePlan = () => state.plans.find(p=>p.active) || state.plans[0] || {id:
 const exInfo = name => state.exercises.find(e=>e.name===name) || {name, muscle:'Other', unit:/dumb/i.test(name)?'lb':'kg'};
 const exUnit = name => state.settings.units[name] || exInfo(name).unit || 'kg';
 function exSets(name){ return state.sets.filter(s=>s.exercise===name && s.reps>0); }
-function exBest(name, unit, excludeId){ let best={e1:0,w:0,set:null,repsAt:{}}; for(const s of exSets(name)){ if(s.unit!==unit) continue; if(excludeId && s.id===excludeId) continue; const w=+s.weight, r=+s.reps; const e=e1rm(w,r); if(e>best.e1){best.e1=e;best.set=s;} if(w>best.w) best.w=w; const k=fmtW(w); if(!(k in best.repsAt)||r>best.repsAt[k]) best.repsAt[k]=r; } return best; }
+function exBest(name, unit, excludeId){ let best={e1:0,w:0,set:null,repsAt:{}}; for(const s of exSets(name)){ if(s.unit!==unit) continue; if(excludeId && s.id===excludeId) continue; const w=+s.weight, r=+s.reps; const e=e1rm(w,r); if(e>best.e1 || (e===best.e1 && best.set && r>+best.set.reps)){best.e1=e;best.set=s;} if(w>best.w) best.w=w; const k=fmtW(w); if(!(k in best.repsAt)||r>best.repsAt[k]) best.repsAt[k]=r; } return best; }
 // FitNotes-style PR: e1RM best, OR heaviest weight ever, OR most reps ever at a weight lifted before.
 function prKind(name, unit, w, r, excludeId){ const b=exBest(name,unit,excludeId); if(!r||!w) return null; const e=e1rm(w,r); if(!b.set) return 'first'; if(e>b.e1) return 'e1rm'; if(w>b.w) return 'weight'; const k=fmtW(w); if(k in b.repsAt && r>b.repsAt[k]) return 'reps'; return null; }
 const isPR = kind => !!kind && kind!=='first';
@@ -728,6 +728,8 @@ if(state.session && state.session.date!==todayISO()){ // an unfinished session c
   const id=state.session.workoutId; const ss=state.sets.filter(s=>s.workout_id===id).map(s=>s.created_at).filter(Boolean).sort(); const endAt=ss.length?ss[ss.length-1]:new Date().toISOString();
   enqueue({t:'wo.update', id, body:{finished_at:endAt, note:JSON.stringify(state.session.notes||{})}}); const w=state.workouts.find(x=>x.id===id); if(w) w.finished_at=endAt; state.session=null; persist();
 }
+// any device: adopt today's workout as the live session so the phone and the laptop show the same day
+if(!state.session){ const w=[...state.workouts].filter(x=>x.date===todayISO()).sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''))[0]; if(w && !w.finished_at){ let notes={}; try{ notes=w.note?JSON.parse(w.note):{}; }catch(e){} state.session={workoutId:w.id,date:w.date,dayKey:w.day_key,dayName:w.day_name,planId:w.plan_id,notes,startedAt:w.started_at}; persist(); } }
 if(!CFG.key){
   $('#main').innerHTML = `<div style="padding:40px 4px"><div class="brand" style="font-size:44px;margin-bottom:6px"><b>IRON</b></div><div style="color:var(--muted);margin-bottom:22px">Private. Paste the access key the coach sent you. It stays on this phone.</div><div class="form"><input id="keyIn" placeholder="access key" autocomplete="off" autocapitalize="off"><button class="btn gold" id="keyGo">Open</button></div></div>`;
   $('#keyGo').onclick=()=>{ const k=$('#keyIn').value.trim(); if(!k) return; try{ localStorage.setItem('iron.key',k); }catch(e){} location.reload(); };

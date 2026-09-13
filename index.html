@@ -205,6 +205,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .datestrip{position:relative;display:flex;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 calc(-1 * var(--pad)) 14px;padding:2px var(--pad) 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .datestrip::-webkit-scrollbar{display:none}
 .healthline{color:var(--muted);font-size:13px;margin:-6px 0 12px;letter-spacing:.01em}.healthline b{color:var(--text);font-variant-numeric:tabular-nums}.healthline .warn{color:var(--gold)}
+.muted{color:var(--muted)}
 .dchip{flex:none;width:36px;height:40px;border-radius:9px;background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;scroll-snap-align:center;line-height:1}
 .dchip.wk{margin-left:8px}
 .dchip .n{font-size:12px;font-weight:600;color:var(--dim)}
@@ -316,6 +317,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
     <button data-page="history"><span class="ic">▤</span><span class="t">History</span><span class="s">Every session, every set</span></button>
     <button data-page="charts"><span class="ic">▲</span><span class="t">Progress</span><span class="s">Volume, e1RM, PRs</span></button>
     <button data-page="diet"><span class="ic">◐</span><span class="t">Diet</span><span class="s">Tap your usuals, weigh-in</span></button>
+    <button data-page="health"><span class="ic">♥</span><span class="t">Health</span><span class="s">Steps, sleep, heart, swims from the watch</span></button>
     <button data-page="volume"><span class="ic">◫</span><span class="t">Volume</span><span class="s">Specialization, recovery, auto sets</span></button>
     <button data-page="coach"><span class="ic">✦</span><span class="t">Coach</span><span class="s">Weekly notes from the coach</span></button>
     <button data-page="photos"><span class="ic">◉</span><span class="t">Photos</span><span class="s">Progress pics, one tap</span></button>
@@ -591,15 +593,15 @@ const HC = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.HealthCon
 const HC_TYPES=['Steps','Distance','ActiveCaloriesBurned','TotalCaloriesBurned','ExerciseSession','SleepSession','HeartRateSeries','RestingHeartRate','HeartRateVariabilityRmssd','OxygenSaturation','Vo2Max','Weight'];
 const EX_KIND={73:'swim',74:'swim',79:'walk',56:'run',57:'run',70:'strength',80:'strength',8:'bike',9:'bike',37:'hike',25:'elliptical',68:'stairs',13:'cardio',36:'hiit',14:'cardio',24:'cardio'};
 const isoLocal = d => { const x=new Date(d); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); };
-async function hcRead(type, start, end){ let recs=[], token; do{ const r=await HC().readRecords({type, timeRangeFilter:{type:'between', startTime:start.toISOString(), endTime:end.toISOString()}, pageSize:1000, pageToken:token}); recs=recs.concat(r.records||[]); token=r.pageToken; }while(token); return recs; }
+async function hcRead(type, start, end, quiet){ let recs=[], token; do{ const r=await HC().readRecords({type, timeRangeFilter:{type:'between', startTime:start.toISOString(), endTime:end.toISOString()}, pageSize:1000, pageToken:token}); recs=recs.concat(r.records||[]); token=r.pageToken; }while(token); if(!quiet){ const st=state.health.stats||(state.health.stats={}); const o={}; recs.forEach(r=>{ const k=(r.metadata&&r.metadata.dataOrigin)||'?'; o[k]=(o[k]||0)+1; }); st[type]={n:recs.length, origins:o}; } return recs; }
 async function hcPermissions(ask){
   const hc=HC(); if(!hc) return false;
   try{ const a=await hc.checkAvailability(); if(a.availability!=='Available'){ state.health.avail=a.availability; LS.set('health',state.health); return false; } }catch(e){ return false; }
-  try{ let r=await hc.checkHealthPermissions({read:HC_TYPES, write:[]}); if(!r.hasAllPermissions && ask) r=await hc.requestHealthPermissions({read:HC_TYPES, write:[]}); state.health.granted=r.grantedPermissions.length>0; state.health.avail='Available'; LS.set('health',state.health); return state.health.granted; }catch(e){ console.warn('hc perms',e); return false; }
+  try{ let r=await hc.checkHealthPermissions({read:HC_TYPES, write:[]}); if(!r.hasAllPermissions && ask) r=await hc.requestHealthPermissions({read:HC_TYPES, write:[]}); state.health.granted=r.grantedPermissions.length>0; state.health.grantedList=r.grantedPermissions; state.health.avail='Available'; LS.set('health',state.health); return state.health.granted; }catch(e){ console.warn('hc perms',e); return false; }
 }
 async function healthSync(days){
   const hc=HC(); if(!hc) return; if(!(await hcPermissions(true))) return;
-  setStatus('busy','reading Health Connect');
+  setStatus('busy','reading Health Connect'); state.health.stats={};
   const end=new Date(); const start=new Date(); start.setHours(0,0,0,0); start.setDate(start.getDate()-(days||7)); start.setHours(start.getHours()-6);
   const D={}; const day=(iso)=>D[iso]||(D[iso]={date:iso});
   const sum=(type, key, pick)=>hcRead(type,start,end).then(rs=>rs.forEach(r=>{ const d=day(isoLocal(r.startTime)); d[key]=(d[key]||0)+pick(r); })).catch(e=>console.warn(type,e));
@@ -617,9 +619,9 @@ async function healthSync(days){
   try{ const sl=await hcRead('SleepSession',start,end); sl.forEach(r=>{ const k=isoLocal(r.endTime); const total=(new Date(r.endTime)-new Date(r.startTime))/60000; const st=(r.stages||[]); const asleep=st.length? st.filter(x=>[2,4,5,6].includes(+x.stage)).reduce((a,x)=>a+(new Date(x.endTime)-new Date(x.startTime))/60000,0) : total; const d=day(k); if(!d.sleep_min || asleep>d.sleep_min){ d.sleep_start=r.startTime; d.sleep_end=r.endTime; d.sleep_min=Math.round(asleep); const agg={}; st.forEach(x=>{ agg[x.stage]=(agg[x.stage]||0)+Math.round((new Date(x.endTime)-new Date(x.startTime))/60000); }); d.sleep_stages=agg; } }); }catch(e){ console.warn('sleep',e); }
   const S=[];
   try{ const ex=await hcRead('ExerciseSession',start,end); for(const r of ex){ const row={id:r.metadata.id, date:isoLocal(r.startTime), kind:EX_KIND[r.exerciseType]||'other', exercise_type:r.exerciseType, title:r.title||null, start_at:r.startTime, end_at:r.endTime, duration_min:Math.round((new Date(r.endTime)-new Date(r.startTime))/6000)/10, source:r.metadata.dataOrigin||null};
-      try{ const dist=await hcRead('Distance',new Date(r.startTime),new Date(r.endTime)); row.distance_m=Math.round(dist.reduce((a,x)=>a+metres(x.distance),0))||null; }catch(e){}
-      try{ const cal=await hcRead('ActiveCaloriesBurned',new Date(r.startTime),new Date(r.endTime)); row.kcal=Math.round(cal.reduce((a,x)=>a+(x.energy?x.energy.value:0),0))||null; }catch(e){}
-      try{ const hr=await hcRead('HeartRateSeries',new Date(r.startTime),new Date(r.endTime)); const bpm=hr.flatMap(x=>x.samples||[]).map(x=>+x.beatsPerMinute).filter(Boolean); if(bpm.length){ row.avg_hr=Math.round(bpm.reduce((a,b)=>a+b,0)/bpm.length); row.max_hr=Math.max(...bpm); } }catch(e){}
+      try{ const dist=await hcRead('Distance',new Date(r.startTime),new Date(r.endTime),true); row.distance_m=Math.round(dist.reduce((a,x)=>a+metres(x.distance),0))||null; }catch(e){}
+      try{ const cal=await hcRead('ActiveCaloriesBurned',new Date(r.startTime),new Date(r.endTime),true); row.kcal=Math.round(cal.reduce((a,x)=>a+(x.energy?x.energy.value:0),0))||null; }catch(e){}
+      try{ const hr=await hcRead('HeartRateSeries',new Date(r.startTime),new Date(r.endTime),true); const bpm=hr.flatMap(x=>x.samples||[]).map(x=>+x.beatsPerMinute).filter(Boolean); if(bpm.length){ row.avg_hr=Math.round(bpm.reduce((a,b)=>a+b,0)/bpm.length); row.max_hr=Math.max(...bpm); } }catch(e){}
       S.push(row); } }catch(e){ console.warn('exercise',e); }
   const rows=Object.values(D).map(d=>{ const o={}; Object.keys(d).forEach(k=>{ if(k[0]!=='_') o[k]=d[k]; }); o.updated_at=new Date().toISOString(); return o; });
   const H=state.health; rows.forEach(r=>{ H.daily[r.date]=Object.assign(H.daily[r.date]||{}, r); }); S.forEach(r=>{ H.sessions[r.id]=r; }); H.lastSync=Date.now(); LS.set('health',H);
@@ -635,6 +637,28 @@ function healthLine(D){
   if(h&&h.sleep_min) bits.push(`sleep <b>${Math.floor(h.sleep_min/60)}h ${String(h.sleep_min%60).padStart(2,'0')}</b>${h.sleep_min<300?' <span class="warn">band?</span>':''}`);
   if(h&&h.resting_hr) bits.push(`rest HR <b>${h.resting_hr}</b>`);
   return bits.length?`<div class="healthline">${bits.join(' · ')}</div>`:'';
+}
+
+/* ---- health page ---- */
+const STAGE_NAMES={1:'awake',2:'asleep',3:'out of bed',4:'light',5:'deep',6:'REM',7:'awake in bed'};
+const hm = m => m==null?'—':`${Math.floor(m/60)}h ${String(Math.round(m%60)).padStart(2,'0')}`;
+const KIND_LABEL={swim:'Swim',walk:'Walk',run:'Run',strength:'Gym',bike:'Bike',hike:'Hike',elliptical:'Elliptical',stairs:'Stairs',cardio:'Cardio',hiit:'HIIT',other:'Workout'};
+function pageHealth(B,T,A){
+  T.textContent='Health'; const H=state.health; const days=[]; for(let i=0;i<30;i++) days.push(addDaysISO(todayISO(),-i));
+  const wk=weekStartISO(); const wkDays=days.filter(d=>d>=wk); const val=(d,k)=>(H.daily[d]||{})[k];
+  const avg=(arr)=>{ const v=arr.filter(x=>x!=null); return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null; };
+  const wkSteps=avg(wkDays.map(d=>val(d,'steps'))); const wkSleep=avg(wkDays.map(d=>val(d,'sleep_min'))); const wkHr=avg(wkDays.map(d=>val(d,'resting_hr')));
+  const swimW=Object.values(H.sessions).filter(x=>x.kind==='swim' && x.date>=wk); const swimM=swimW.reduce((a,x)=>a+(x.distance_m||0),0);
+  const granted=H.grantedList||[]; const PERM={Steps:'READ_STEPS',Distance:'READ_DISTANCE',ActiveCaloriesBurned:'READ_ACTIVE_CALORIES_BURNED',TotalCaloriesBurned:'READ_TOTAL_CALORIES_BURNED',ExerciseSession:'READ_EXERCISE',SleepSession:'READ_SLEEP',HeartRateSeries:'READ_HEART_RATE',RestingHeartRate:'READ_RESTING_HEART_RATE',HeartRateVariabilityRmssd:'READ_HEART_RATE_VARIABILITY',OxygenSaturation:'READ_OXYGEN_SATURATION',Vo2Max:'READ_VO2_MAX',Weight:'READ_WEIGHT'}; const missing=granted.length?HC_TYPES.filter(t=>!granted.some(g=>g.endsWith(PERM[t]))):[];
+  const stats=H.stats||{}; const statLine=Object.keys(stats).length?Object.keys(stats).map(t=>`${t} <b>${stats[t].n}</b>${Object.keys(stats[t].origins).length?' <span class="muted">('+Object.keys(stats[t].origins).map(o=>o.replace('com.sec.android.app.shealth','Samsung Health').replace('com.google.android.apps.fitness','Google Fit')).join(', ')+')</span>':''}`).join(' · '):'nothing read yet';
+  if(isNative()) A.textContent='Read 30 days', A.className='act', A.onclick=()=>{ toast('Reading…'); healthSync(30).then(()=>{ toast('Done'); pageHealth(B,T,A); }).catch(e=>toast('Read failed: '+(e.message||e))); }; else { A.textContent=''; A.onclick=null; }
+  B.innerHTML=`<div class="kv" style="grid-template-columns:repeat(4,1fr)"><div class="tile"><div class="k">Steps / day</div><div class="v">${wkSteps!=null?wkSteps.toLocaleString():'—'}</div></div><div class="tile"><div class="k">Sleep</div><div class="v" style="font-size:18px">${hm(wkSleep)}</div></div><div class="tile"><div class="k">Rest HR</div><div class="v">${wkHr!=null?wkHr:'—'}</div></div><div class="tile"><div class="k">Swim</div><div class="v">${swimM?swimM+'<small> m</small>':(swimW.length?swimW.length+'<small> sess</small>':'—')}</div></div></div>
+  <div class="empty" style="text-align:left;padding:0 0 12px">This week so far. ${isNative()?`Health Connect: ${H.avail==='Available'?(granted.length+' of '+HC_TYPES.length+' permissions granted'):(H.avail||'not checked')}${missing.length?` — <b>missing: ${missing.join(', ')}</b>. Health Connect → App permissions → IRON → allow all, then Read 30 days.`:''}${H.lastSync?' · last read '+new Date(H.lastSync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}<br><span class="muted">Last read: ${statLine}</span>`:'Numbers come from the Android app (Health Connect). This page only shows what it has already sent.'}</div>
+  ${days.map(d=>{ const h=H.daily[d]; const ss=sessionsOn(d); if(!h && !ss.length) return ''; const dt=new Date(d+'T00:00'); const st=h&&h.sleep_stages?Object.keys(h.sleep_stages).filter(k=>+k!==1&&+k!==7&&+k!==3).map(k=>`${STAGE_NAMES[k]||k} ${hm(h.sleep_stages[k])}`).join(' · '):'';
+    return `<div class="vrow"><div class="vh"><div><div class="t">${d===todayISO()?'Today':dt.toLocaleDateString('en-GB',{weekday:'long'})}</div><div class="s">${dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div></div><div class="big num" style="margin-left:auto">${h&&h.steps!=null?h.steps.toLocaleString():'—'}<small> steps</small></div></div>
+      <div class="vs">${h&&h.distance_m?`<span>walked <b>${(h.distance_m/1000).toFixed(1)} km</b></span>`:''}${h&&h.active_kcal?`<span>active <b>${h.active_kcal}</b> kcal</span>`:''}${h&&h.total_kcal?`<span>burned <b>${h.total_kcal.toLocaleString()}</b></span>`:''}${h&&h.sleep_min?`<span>sleep <b>${hm(h.sleep_min)}</b>${h.sleep_min<300?' <b class="a">band?</b>':''}${h.sleep_start?' <span class="muted">'+new Date(h.sleep_start).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'→'+new Date(h.sleep_end).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</span>':''}</span>`:''}${st?`<span class="muted">${st}</span>`:''}${h&&h.resting_hr?`<span>rest HR <b>${h.resting_hr}</b></span>`:''}${h&&h.hrv_ms?`<span>HRV <b>${h.hrv_ms}</b> ms</span>`:''}${h&&h.spo2?`<span>SpO₂ <b>${h.spo2}%</b></span>`:''}${h&&h.vo2max?`<span>VO₂max <b>${h.vo2max}</b></span>`:''}${h&&h.weight?`<span>weight <b>${h.weight} kg</b></span>`:''}</div>
+      ${ss.map(x=>`<div class="vs" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span><b>${KIND_LABEL[x.kind]||x.kind}</b>${x.title&&x.title!==KIND_LABEL[x.kind]?' · '+esc(x.title):''}</span><span>${new Date(x.start_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · <b>${Math.round(x.duration_min)}</b> min</span>${x.distance_m?`<span><b>${x.kind==='swim'?x.distance_m+' m':(x.distance_m/1000).toFixed(2)+' km'}</b></span>`:''}${x.kcal?`<span><b>${x.kcal}</b> kcal</span>`:''}${x.avg_hr?`<span>HR <b>${x.avg_hr}</b> avg · <b>${x.max_hr}</b> max</span>`:''}</div>`).join('')}
+    </div>`; }).join('') || '<div class="empty">No health data yet. Open the Android app, allow Health Connect, then Read 30 days.</div>'}`;
 }
 /* ================= RENDER: THE DAY ================= */
 let clockT=null;
@@ -946,6 +970,7 @@ function openPage(kind, arg){
   else if(kind==='charts') pageCharts(B,T,A);
   else if(kind==='photos') pagePhotos(B,T,A);
   else if(kind==='volume') pageVolume(B,T,A);
+  else if(kind==='health') pageHealth(B,T,A);
   else if(kind==='diet') pageDiet(B,T,A);
   else if(kind==='coach') pageCoach(B,T,A);
   else if(kind==='plans') pagePlans(B,T,A);

@@ -1,0 +1,13 @@
+{
+  "name": "IRON — Shankar",
+  "short_name": "IRON",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0D10",
+  "theme_color": "#0B0D10",
+  "icons": [
+    {"src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='110' fill='%230B0D10'/%3E%3Ctext x='256' y='330' font-family='Arial Black,Arial' font-weight='900' font-size='230' fill='%23F2C14E' text-anchor='middle'%3EIR%3C/text%3E%3C/svg%3E", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any"}
+  ]
+}

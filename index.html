@@ -823,7 +823,7 @@ $('#padLog').onclick=()=>{
   const note=$('#padNote').value.trim()||null; const tg=pad.target;
   const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:null, note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
   state.sets.push({...row,_local:true}); persist(); enqueue({t:'set.insert', row});
-  if(is_pr) buzz(alertSettings().pr); else if(navigator.vibrate) navigator.vibrate(15);
+  if(is_pr) firePR(); else if(navigator.vibrate) navigator.vibrate(15);
   const hit = tg && w>=tg.w && r>=tg.r;
   const lbl={e1rm:'PR · e1RM '+e1rm(w,r), weight:'PR · heaviest ever', reps:'PR · most reps at '+fmtW(w)+pad.unit, first:'First time logged'}[kind];
   toast(lbl?`${lbl} · ${pad.name}`:`Set ${row.set_no} logged${hit?' · target hit':''}${today?'':' · '+D.slice(5)}`, is_pr||hit);
@@ -844,11 +844,24 @@ function setDetail(id){
 
 /* alerts: vibration patterns, beep, system notification */
 const VIB={buzz:[120], double:[80,60,80], long:[400], heartbeat:[60,40,60,180,60,40,60], triple:[70,50,70,50,70], off:[]};
-function alertSettings(){ return Object.assign({pattern:'double', pr:'heartbeat', sound:true, notify:false}, state.settings.alerts||{}); }
+function alertSettings(){ const a=Object.assign({pattern:'double', pr:'heartbeat', restSound:'chime', prSound:'fanfare', notify:false}, state.settings.alerts||{}); if(a.sound===false && !state.settings.alerts.restSound) a.restSound='none'; return a; }
 function buzz(name){ const p=VIB[name]||[]; if(p.length && navigator.vibrate) navigator.vibrate(p); }
-function beep(){ try{ const A=window.AudioContext||window.webkitAudioContext; const c=beep.ctx||(beep.ctx=new A()); const t=c.currentTime; [0,.18].forEach(d=>{ const o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=880; g.gain.setValueAtTime(0,t+d); g.gain.linearRampToValueAtTime(.25,t+d+.02); g.gain.exponentialRampToValueAtTime(.001,t+d+.15); o.connect(g).connect(c.destination); o.start(t+d); o.stop(t+d+.16); }); }catch(e){} }
-async function notify(title, body, tag){ const a=alertSettings(); if(!a.notify || !('Notification' in window) || Notification.permission!=='granted') return; try{ const reg=await navigator.serviceWorker.ready; reg.showNotification(title, {body, tag, vibrate:VIB[a.pattern]||[], silent:!a.sound, icon:document.querySelector('link[rel=icon]').href}); }catch(e){ try{ new Notification(title,{body,tag}); }catch(_){} } }
-function fireRestAlert(){ const a=alertSettings(); buzz(a.pattern); if(a.sound) beep(); notify('Rest over','Next set.','rest'); }
+// synthesized sounds: [delay s, frequency Hz, length s, wave] notes
+const SOUNDS={
+  none:[],
+  chime:[[0,880,.15,'sine'],[.18,880,.15,'sine']],
+  bell:[[0,1318,.6,'sine'],[0,1760,.5,'sine']],
+  ding:[[0,1046,.12,'triangle'],[.15,1318,.2,'triangle']],
+  rising:[[0,523,.12,'square'],[.12,659,.12,'square'],[.24,784,.25,'square']],
+  buzzer:[[0,180,.35,'sawtooth'],[.4,180,.35,'sawtooth']],
+  fanfare:[[0,523,.12,'square'],[.12,659,.12,'square'],[.24,784,.12,'square'],[.36,1046,.45,'square']],
+  coin:[[0,988,.08,'square'],[.08,1318,.3,'square']],
+  gong:[[0,196,1.2,'sine'],[0,392,.8,'triangle'],[0,587,.5,'sine']],
+};
+function play(name){ const notes=SOUNDS[name]; if(!notes||!notes.length) return; try{ const A=window.AudioContext||window.webkitAudioContext; const c=play.ctx||(play.ctx=new A()); if(c.state==='suspended') c.resume(); const t=c.currentTime; notes.forEach(([d,f,len,w])=>{ const o=c.createOscillator(), g=c.createGain(); o.type=w||'sine'; o.frequency.value=f; g.gain.setValueAtTime(0,t+d); g.gain.linearRampToValueAtTime(w==='square'?.12:.25,t+d+.02); g.gain.exponentialRampToValueAtTime(.001,t+d+len); o.connect(g).connect(c.destination); o.start(t+d); o.stop(t+d+len+.02); }); }catch(e){} }
+async function notify(title, body, tag){ const a=alertSettings(); if(!a.notify || !('Notification' in window) || Notification.permission!=='granted') return; try{ const reg=await navigator.serviceWorker.ready; reg.showNotification(title, {body, tag, vibrate:VIB[tag==='pr'?a.pr:a.pattern]||[], silent:(tag==='pr'?a.prSound:a.restSound)==='none', icon:document.querySelector('link[rel=icon]').href}); }catch(e){ try{ new Notification(title,{body,tag}); }catch(_){} } }
+function fireRestAlert(){ const a=alertSettings(); buzz(a.pattern); play(a.restSound); notify('Rest over','Next set.','rest'); }
+function firePR(name){ const a=alertSettings(); buzz(a.pr); play(a.prSound); }
 async function askNotify(){ if(!('Notification' in window)) return 'unsupported'; const r=await Notification.requestPermission(); return r; }
 
 /* rest timer */
@@ -1100,9 +1113,13 @@ function pageSettings(B,T){
     <div class="section"><h4>Rest timer</h4><div class="segs"><button class="${s.restOn?'on':''}" data-rest="on">On</button><button class="${!s.restOn?'on':''}" data-rest="off">Off</button></div><div class="segs">${[60,90,120,150,180,240].map(v=>`<button class="${(s.rest||90)===v?'on':''}" data-restsec="${v}">${v}s</button>`).join('')}</div><div class="empty" style="text-align:left;padding:0 0 10px">Actual rest between sets is always recorded from the clock, timer or not.</div></div>
     <div class="section"><h4>Alerts</h4><div class="empty" style="text-align:left;padding:0 0 8px">When the rest timer ends.</div>
       <div class="segs">${Object.keys(VIB).map(k=>`<button class="${alertSettings().pattern===k?'on':''}" data-vib="${k}">${k}</button>`).join('')}</div>
-      <div class="segs"><button class="${alertSettings().sound?'on':''}" data-snd="1">Beep on</button><button class="${!alertSettings().sound?'on':''}" data-snd="0">Beep off</button><button class="${alertSettings().notify?'on':''}" data-ntf="1">Notification on</button><button class="${!alertSettings().notify?'on':''}" data-ntf="0">Notification off</button><button id="alertTest">Test</button></div>
-      <div class="empty" style="text-align:left;padding:0 0 4px">PR buzz:</div>
+      <div class="empty" style="text-align:left;padding:0 0 4px">Rest sound:</div>
+      <div class="segs">${Object.keys(SOUNDS).map(k=>`<button class="${alertSettings().restSound===k?'on':''}" data-rsnd="${k}">${k}</button>`).join('')}</div>
+      <div class="segs"><button class="${alertSettings().notify?'on':''}" data-ntf="1">Notification on</button><button class="${!alertSettings().notify?'on':''}" data-ntf="0">Notification off</button><button id="alertTest">Test rest alert</button></div>
+      <div class="empty" style="text-align:left;padding:8px 0 4px"><b>When you hit a PR.</b> Buzz:</div>
       <div class="segs">${Object.keys(VIB).map(k=>`<button class="${alertSettings().pr===k?'on':''}" data-prv="${k}">${k}</button>`).join('')}</div>
+      <div class="empty" style="text-align:left;padding:0 0 4px">PR sound:</div>
+      <div class="segs">${Object.keys(SOUNDS).map(k=>`<button class="${alertSettings().prSound===k?'on':''}" data-psnd="${k}">${k}</button>`).join('')}<button id="prTest">Test PR</button></div>
       <div class="empty" style="text-align:left;padding:0 0 10px">Notifications let the alert reach you when the screen is off or you're in another app. ${('Notification' in window)?'Permission: '+Notification.permission:'Not supported on this browser.'}</div></div>
     <div class="section"><h4>Sync</h4><div class="list"><div class="item"><div class="m"><div class="t">${state.online?'Online':'Offline'}</div><div class="s">${state.queue.length} pending · last sync ${state.lastSync?new Date(state.lastSync).toLocaleString():'never'} · ${state.sets.length} sets local</div></div><button class="btn sm" id="syncNow">Sync now</button></div></div></div>
     <div class="section"><h4>Session</h4><div class="list"><div class="item"><div class="m"><div class="t">${state.session?('Open: '+esc(state.session.dayName)+' · '+state.session.date):'No open session'}</div><div class="s">Sessions start on your first set and end at your last. A gap over an hour starts a new one.</div></div>${state.session?'<button class="btn sm red" id="discard">Discard</button>':''}</div></div></div>
@@ -1116,7 +1133,9 @@ function pageSettings(B,T){
   const setA=patch=>{ s.alerts={...alertSettings(),...patch}; persist(); pageSettings(B,T); };
   $$('#pageBody [data-vib]').forEach(b=>b.onclick=()=>{ setA({pattern:b.dataset.vib}); buzz(b.dataset.vib); });
   $$('#pageBody [data-prv]').forEach(b=>b.onclick=()=>{ setA({pr:b.dataset.prv}); buzz(b.dataset.prv); });
-  $$('#pageBody [data-snd]').forEach(b=>b.onclick=()=>{ setA({sound:b.dataset.snd==='1'}); if(b.dataset.snd==='1') beep(); });
+  $$('#pageBody [data-rsnd]').forEach(b=>b.onclick=()=>{ setA({restSound:b.dataset.rsnd}); play(b.dataset.rsnd); });
+  $$('#pageBody [data-psnd]').forEach(b=>b.onclick=()=>{ setA({prSound:b.dataset.psnd}); play(b.dataset.psnd); });
+  $('#prTest').onclick=()=>firePR();
   $$('#pageBody [data-ntf]').forEach(b=>b.onclick=async()=>{ if(b.dataset.ntf==='1'){ const r=await askNotify(); if(r!=='granted'){ toast(r==='unsupported'?'Not supported here':'Permission not given'); setA({notify:false}); return; } } setA({notify:b.dataset.ntf==='1'}); });
   $('#alertTest').onclick=()=>fireRestAlert();
   $('#syncNow').onclick=()=>fullSync().then(()=>pageSettings(B,T));

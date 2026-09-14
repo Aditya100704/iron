@@ -279,9 +279,11 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .vrow .vl{font-size:12px;color:var(--gold);margin-top:6px}
 .vrow .vf{display:flex;gap:6px;align-items:center;margin-top:8px}
 .pad .hint .tg{color:var(--gold);font-weight:600}
-.weigh{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-.weigh .lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
-.weigh input{width:64px;min-width:0;padding:6px 8px;min-height:38px;font-family:var(--mono);text-align:center}
+.weigh{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px}
+.weigh label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.weigh .lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.weigh input{width:100%;min-width:0;padding:8px 6px;min-height:48px;font-family:var(--mono);font-size:20px;text-align:center}
+.weigh .btn{grid-column:1 / -1;min-height:44px}
 .foods .item .plus{color:var(--gold);font-size:22px;line-height:1}
 .kv .tile .v.over{color:var(--red)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -1208,9 +1210,8 @@ function pageDiet(B,T,A){
   const logged=new Set(state.meals.map(m=>m.date));
   B.innerHTML=`<div class="datestrip" id="dietStrip">${dateStrip(D, logged)}</div>
     ${today?'':`<div class="empty" style="padding:0 0 10px;text-align:left;color:var(--gold)">${new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})} · <a href="#" id="dietToday" style="color:var(--gold)">back to today</a></div>`}
-    <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div>${(healthOn(D)&&healthOn(D).steps)?`<div class="tile"><div class="k">Steps</div><div class="v">${healthOn(D).steps.toLocaleString()}</div></div>`:''}</div>
-    ${healthLine(D)}
-    <div class="weigh"><span class="lbl">Weigh-in</span><input id="bwIn" type="number" inputmode="decimal" step="0.1" placeholder="kg" value="${bm&&bm.weight!=null?bm.weight:''}"><span class="lbl">Waist ↑</span><input id="waIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_above!=null?bm.waist_above:''}"><span class="lbl">@</span><input id="wnIn" type="number" inputmode="decimal" step="0.1" placeholder='in' value="${bm&&bm.waist_at!=null?bm.waist_at:''}"><button class="btn sm gold" id="bwSave">Save</button></div>
+    <div class="kv"><div class="tile"><div class="k">Calories</div><div class="v">${kcal.toLocaleString()}<small>/ ${tg.kcal.toLocaleString()}</small></div></div><div class="tile"><div class="k">Protein</div><div class="v">${pro}<small>/ ${tg.protein} g</small></div></div><div class="tile"><div class="k">Left</div><div class="v ${kcal>tg.kcal?'over':''}">${(tg.kcal-kcal).toLocaleString()}</div></div></div>
+    <div class="weigh"><label><span class="lbl">Weigh-in · kg</span><input id="bwIn" type="number" inputmode="decimal" step="0.1" placeholder="62.0" value="${bm&&bm.weight!=null?bm.weight:''}"></label><label><span class="lbl">Waist above · in</span><input id="waIn" type="number" inputmode="decimal" step="0.1" placeholder="27.6" value="${bm&&bm.waist_above!=null?bm.waist_above:''}"></label><label><span class="lbl">Waist at navel · in</span><input id="wnIn" type="number" inputmode="decimal" step="0.1" placeholder="28.2" value="${bm&&bm.waist_at!=null?bm.waist_at:''}"></label><button class="btn gold" id="bwSave">Save</button></div>
     <div class="section" style="margin-top:14px"><h4>Logged ${today?'today':''}</h4><div class="list">${ms.map(m=>`<div class="item"><div class="m"><div class="t">${esc(m.item)}${(+m.qty||1)!==1?' × '+m.qty:''}</div><div class="s">${(SLOTS.find(x=>x[0]===m.slot)||['','Meal'])[1]} · ${Math.round(m.kcal*(+m.qty||1))} kcal · ${Math.round(m.protein*(+m.qty||1))} g${m.note?' · '+esc(m.note):''}</div></div><button class="iconbtn" data-mdel="${m.id}" style="color:var(--red)">×</button></div>`).join('')||'<div class="empty">Nothing logged yet.</div>'}</div></div>
     <div class="segs" style="margin-top:4px">${SLOTS.map(([k,l])=>`<button class="${dietSlot===k?'on':''}" data-slot="${k}">${l}</button>`).join('')}</div>
     <div class="list foods">${items.map(f=>`<div class="item click" data-food="${esc(f.name)}"><div class="m"><div class="t">${esc(f.name)}</div><div class="s">${f.kcal} kcal · ${f.protein} g${f.uses?' · '+f.uses+'×':''}</div></div><span class="plus">+</span></div>`).join('')||'<div class="empty">Nothing here yet. Tap + Custom to add one.</div>'}</div>

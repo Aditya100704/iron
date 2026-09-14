@@ -879,6 +879,7 @@ function openPad(day, slot){
   $('#padNote').value='';
   pad.wStep=stepFor($('#padW').value);
   renderRir(); updateHint();
+  if(!$('#pad').classList.contains('open')) pushLayer('pad', ()=>{ $('#pad').classList.remove('open'); document.activeElement&&document.activeElement.blur(); });
   $('#pad').classList.add('open'); setTimeout(()=>{ $('#padW').focus(); $('#padW').select(); },60);
 }
 function renderUnit(){ const b=$('#padUnit'); b.textContent=pad.unit; b.className='unitbtn '+pad.unit; }
@@ -911,7 +912,7 @@ $('#padUnit').onclick=()=>{ pad.unit=pad.unit==='kg'?'lb':'kg'; state.settings.u
 $('#rirLbl').onpointerdown=e=>e.preventDefault();
 $('#rirLbl').onclick=()=>{ state.settings.mode=(state.settings.mode||'rir')==='rir'?'rpe':'rir'; persist(); renderRir(); };
 $('#padNote').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#padLog').click(); } };
-$('#padCancel').onpointerdown=e=>e.preventDefault(); $('#padCancel').onclick=()=>{ $('#pad').classList.remove('open'); document.activeElement&&document.activeElement.blur(); };
+$('#padCancel').onpointerdown=e=>e.preventDefault(); $('#padCancel').onclick=()=>closeLayer('pad');
 $('#padLog').onpointerdown=e=>e.preventDefault();
 $('#padLog').onclick=()=>{
   const w=+$('#padW').value, r=+$('#padR').value; if(!r){ toast('Reps?'); return; }
@@ -928,7 +929,7 @@ $('#padLog').onclick=()=>{
   const lbl={e1rm:'PR · e1RM '+e1rm(w,r), weight:'PR · heaviest ever', reps:'PR · most reps at '+fmtW(w)+pad.unit, first:'First time logged'}[kind];
   toast(lbl?`${lbl} · ${pad.name}`:`Set ${row.set_no} logged${hit?' · target hit':''}${today?'':' · '+D.slice(5)}`, is_pr||hit);
   if(today && state.settings.restOn) startRest(state.settings.rest||90);
-  $('#pad').classList.remove('open'); document.activeElement&&document.activeElement.blur(); render();
+  closeLayer('pad'); render();
 }
 function setDetail(id){
   const s=state.sets.find(x=>x.id===id); if(!s) return;
@@ -974,16 +975,28 @@ function noteModal(name, day){
   modal('Note · '+name, `<textarea id="noteTxt" placeholder="How it felt, intensity, form cue, anything.">${esc(cur)}</textarea>`, [{t:'Cancel'},{t:'Save',gold:true,fn:()=>{ const v=$('#noteTxt').value.trim(); const s=ensureSession(day); const notes={...notesFor(D)}; if(v) notes[name]=v; else delete notes[name]; const w=state.workouts.find(x=>x.id===s.workoutId); if(w) w.note=JSON.stringify(notes); if(D===todayISO() && state.session && state.session.workoutId===s.workoutId) state.session.notes=notes; persist(); enqueue({t:'wo.update', id:s.workoutId, body:{note:JSON.stringify(notes)}}); render(); }}]);
   setTimeout(()=>$('#noteTxt').focus(),100);
 }
-function modal(title, body, acts){ $('#modalTitle').textContent=title; $('#modalBody').innerHTML=body; $('#modalActs').innerHTML=acts.map((a,i)=>`<button class="btn sm ${a.gold?'gold':''} ${a.red?'red':''}" data-i="${i}">${a.t}</button>`).join(''); $$('#modalActs button').forEach(b=>b.onclick=()=>{ const a=acts[+b.dataset.i]; if(a.fn) a.fn(); if(!a.keep) closeModal(); }); $('#modal').classList.add('on'); }
-function closeModal(){ $('#modal').classList.remove('on'); }
+/* ---- back button: every open layer is a history entry; popstate closes the top one ---- */
+const LAYERS=[]; let pendingPops=0;
+function pushLayer(kind, close, data, replace){ LAYERS.push({kind, close, data}); if(replace) history.replaceState({l:LAYERS.length},''); else history.pushState({l:LAYERS.length},''); }
+function popLayers(n){ if(n<=0) return; for(let i=0;i<n;i++){ const l=LAYERS.pop(); if(l){ try{ l.close(); }catch(e){} } } pendingPops++; history.go(-n); }
+function closeLayer(kind, all){ const ks=LAYERS.map(l=>l.kind); let i=all?ks.indexOf(kind):ks.lastIndexOf(kind); if(i<0) return; popLayers(LAYERS.length-i); }
+window.addEventListener('popstate', e=>{ if(pendingPops>0){ pendingPops--; return; } const depth=(e.state&&e.state.l)||0; while(LAYERS.length>depth){ const l=LAYERS.pop(); try{ l.close(); }catch(x){} } });
+try{ history.replaceState({l:0},''); }catch(e){}
+function modal(title, body, acts){ if(!$('#modal').classList.contains('on')) pushLayer('modal', ()=>$('#modal').classList.remove('on')); $('#modalTitle').textContent=title; $('#modalBody').innerHTML=body; $('#modalActs').innerHTML=acts.map((a,i)=>`<button class="btn sm ${a.gold?'gold':''} ${a.red?'red':''}" data-i="${i}">${a.t}</button>`).join(''); $$('#modalActs button').forEach(b=>b.onclick=()=>{ const a=acts[+b.dataset.i]; if(a.fn) a.fn(); if(!a.keep) closeModal(); }); $('#modal').classList.add('on'); }
+function closeModal(){ if($('#modal').classList.contains('on')) closeLayer('modal'); }
 $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
 
 /* ================= MENU + PAGES ================= */
-$('#fab').onclick=()=>{ $('#scrim').classList.add('on'); $('#sheet').classList.add('open'); };
-$('#scrim').onclick=()=>{ $('#scrim').classList.remove('on'); $('#sheet').classList.remove('open'); };
-$$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ $('#scrim').click(); openPage(b.dataset.page); });
-$('#pageBack').onclick=()=>{ $('#page').classList.remove('open'); };
-function openPage(kind, arg){
+const hideSheet=()=>{ $('#scrim').classList.remove('on'); $('#sheet').classList.remove('open'); };
+$('#fab').onclick=()=>{ $('#scrim').classList.add('on'); $('#sheet').classList.add('open'); pushLayer('sheet', hideSheet); };
+$('#scrim').onclick=()=>closeLayer('sheet');
+$$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
+$('#pageBack').onclick=()=>closeLayer('page');
+function openPage(kind, arg, replace){
+  pushLayer('page', ()=>{ const below=[...LAYERS].reverse().find(l=>l.kind==='page'); if(below) renderPage(below.data.kind, below.data.arg); else $('#page').classList.remove('open'); }, {kind, arg}, replace);
+  renderPage(kind, arg);
+}
+function renderPage(kind, arg){
   const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden';
   if(kind==='history') pageHistory(B,T,A);
   else if(kind==='charts') pageCharts(B,T,A);
@@ -1011,7 +1024,7 @@ function pageHistory(B,T){
   $$('#pageBody [data-d]').forEach(el=>el.onclick=()=>openPage('workout', el.dataset.d));
 }
 function pageWorkout(B,T,A,date){
-  A.textContent='Open day'; A.className='act ghost'; A.onclick=()=>{ $('#page').classList.remove('open'); goDate(date); };
+  A.textContent='Open day'; A.className='act ghost'; A.onclick=()=>{ closeLayer('page', true); goDate(date); };
   const ss=state.sets.filter(s=>s.date===date).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); const w=state.workouts.find(x=>x.date===date);
   T.textContent=new Date(date+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
   const by={}; for(const s of ss) (by[s.exercise]=by[s.exercise]||[]).push(s);

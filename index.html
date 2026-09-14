@@ -682,7 +682,10 @@ function pageHealth(B,T,A){
 let clockT=null;
 function render(){
   const plan=activePlan(); const days=plan.data.days; const D=curDate(); const today=D===todayISO();
+  state.settings.restDays = state.settings.restDays || {};
+  if(!state.viewDay && state.settings.restDays[D]) state.viewDay='__rest';
   if(!state.viewDay) state.viewDay = nextDayKey(plan, D);
+  if(state.viewDay==='__rest'){ renderRest(D, today, days); return; }
   const day = days.find(d=>d.key===state.viewDay) || days[0];
   const ds = daySets(D); const span = today?sessionSpan():null; const liveSess = !!span && (Date.now()-span.last) < SESSION_GAP;
   const dLabel = new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'short'});
@@ -732,7 +735,7 @@ function render(){
   $('#main').innerHTML = html;
   fitName(); centerStrip();
   const bySlot = key => slots.find(s=>s.key===key);
-  $('#daySel').onchange = e => { if(e.target.value==='__rest'){ toast('Rest day. Recovery is training.'); e.target.value=day.key; return; } state.viewDay=e.target.value; render(); };
+  $('#daySel').onchange = e => { if(e.target.value==='__rest'){ state.settings.restDays[D]=true; persist(); state.viewDay='__rest'; render(); return; } state.viewDay=e.target.value; render(); };
   $$('#dateStrip [data-date]').forEach(b=>b.onclick=()=>goDate(b.dataset.date));
   $$('[data-add]').forEach(b=>b.onclick=()=>openPad(day, bySlot(b.dataset.add)));
   $$('[data-swap]').forEach(b=>b.onclick=()=>swapSheet(bySlot(b.dataset.swap), day));
@@ -755,6 +758,33 @@ function render(){
   clearInterval(clockT); if(span && liveSess){ clockT=setInterval(()=>{ const c=$('#clock'); if(c) c.textContent=fmtDur((Date.now()-span.start)/1000); },1000); }
 }
 function goDate(d){ state.viewDate = d===todayISO()?null:d; state.viewDay=null; render(); }
+function renderRest(D, today, days){
+  const ds=daySets(D); const h=healthOn(D);
+  const dLabel = new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'short'});
+  const bits=[]; if(h&&h.steps) bits.push(`${h.steps.toLocaleString()} steps so far`); if(h&&h.sleep_min) bits.push(`slept ${Math.floor(h.sleep_min/60)}h ${String(h.sleep_min%60).padStart(2,'0')}`);
+  $('#main').innerHTML = `
+  <div class="dayhead"><label class="daypick"><h1 class="dayname" id="dayName">Rest day</h1><span class="caret" aria-hidden="true"></span><select id="daySel" aria-label="Choose the workout for this day">${days.map(d=>`<option value="${d.key}">${esc(d.name)}</option>`).join('')}<option value="__rest" selected>Rest day</option></select></label></div>
+  <div class="daymeta"><span class="past">${dLabel}</span><span><b>0</b> exercises</span>${ds.length?`<span><b>${ds.length}</b> logged</span>`:''}</div>
+  ${metersRow(D)}
+  <div class="datestrip" id="dateStrip">${dateStrip(D)}</div>
+  ${healthLine(D)}
+  ${today?coachCard()+volumeCard()+deloadCard():''}
+  <div class="volcard"><div class="k">Recovery is training</div><div class="vchg"><b>Nothing to lift today.</b><span>The muscle is built between sessions. Walk, hit the food target, sleep seven hours.${bits.length?' '+bits.join(' · ')+'.':''}</span></div><div class="acts"><button class="btn sm" id="restUndo">Train anyway</button></div></div>
+  ${ds.length?`<div class="empty" style="text-align:left">${ds.length} set${ds.length>1?'s':''} logged on this day anyway. <a href="#" id="restHist">Open in History</a>.</div>`:''}`;
+  fitName(); centerStrip();
+  $('#daySel').onchange = e => { delete state.settings.restDays[D]; persist(); state.viewDay = e.target.value==='__rest' ? '__rest' : e.target.value; render(); };
+  $('#restUndo').onclick = () => { delete state.settings.restDays[D]; persist(); state.viewDay=null; render(); };
+  const rh=$('#restHist'); if(rh) rh.onclick=e=>{ e.preventDefault(); openPage('workout', D); };
+  $$('#dateStrip [data-date]').forEach(b=>b.onclick=()=>goDate(b.dataset.date));
+  const mt=$('#meters'); if(mt) mt.onclick=()=>openPage('volume');
+  const cm=$('#coachMore'); if(cm) cm.onclick=()=>{ $('#coachBody').classList.add('full'); cm.remove(); };
+  $$('[data-noteread]').forEach(b=>b.onclick=()=>{ const n=state.notes.find(x=>x.id===b.dataset.noteread); if(n){ n.read_at=new Date().toISOString(); persist(); enqueue({t:'note.read', id:n.id, at:n.read_at}); } render(); });
+  $$('#main [data-undo]').forEach(b=>b.onclick=()=>{ undoVolume(b.dataset.undo); toast('Undone'); render(); });
+  const vo=$('#volOk'); if(vo) vo.onclick=()=>{ state.settings.volSeen[weekStartISO()]=true; persist(); render(); };
+  const dy=$('#deloadYes'); if(dy) dy.onclick=()=>{ state.settings.deload[weekStartISO()]=true; persist(); toast('Deload week: half the sets, same weights'); render(); };
+  const dn=$('#deloadNo'); if(dn) dn.onclick=()=>{ state.settings.deloadNo[weekStartISO()]=true; persist(); render(); };
+  clearInterval(clockT);
+}
 function fitName(){ const el=$('#dayName'); if(!el) return; let s=46; el.style.fontSize=s+'px'; while(el.scrollWidth>el.clientWidth+1 && s>18){ s-=1; el.style.fontSize=s+'px'; } }
 function centerStrip(id){ const st=$(id||'#dateStrip'); const sel=st&&st.querySelector('.sel'); if(sel) st.scrollLeft = sel.offsetLeft - st.clientWidth/2 + sel.offsetWidth/2; }
 window.addEventListener('resize', ()=>fitName());
@@ -1292,6 +1322,7 @@ if(!CFG.key){
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
 if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+if(isNative() && Capacitor.Plugins && Capacitor.Plugins.App){ try{ Capacitor.Plugins.App.addListener('backButton', ()=>{ if(LAYERS.length) history.back(); else Capacitor.Plugins.App.exitApp(); }); }catch(e){ console.warn('back listener', e); } }
 </script>
 </body>
 </html>

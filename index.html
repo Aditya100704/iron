@@ -1362,6 +1362,8 @@ function pageSettings(B,T){
 
 /* ================= BOOT ================= */
 if(!state.plans.length) state.plans=[{id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true}];
+// one-time purge (2.7): mis-dated photo inserts from the old picker were still sitting in the offline queue and re-posting on every open
+if(!state.settings.purgedPhotoQueue){ const n=state.queue.length; state.queue=state.queue.filter(op=>op.t!=='photo.insert'); state.settings.purgedPhotoQueue=true; persist(); if(n!==state.queue.length) console.warn('purged queued photo inserts', n-state.queue.length); }
 if(state.session && state.session.date!==todayISO()){ // an unfinished session closes at its LAST SET, not at now
   const id=state.session.workoutId; const ss=state.sets.filter(s=>s.workout_id===id).map(s=>s.created_at).filter(Boolean).sort(); closeSession(ss.length?ss[ss.length-1]:new Date().toISOString());
 }

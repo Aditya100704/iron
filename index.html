@@ -95,6 +95,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .setrow.pr .n{color:var(--gold)}
 .setrow.lc .n::after{content:'~';color:var(--muted);font-size:11px;margin-left:2px}
 .setrow .ss{color:var(--gold);font-size:13px;margin-left:5px}
+.setrow .ss.hardtag{color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
 .daymeta .clock{cursor:pointer;border-bottom:1px dotted var(--muted)}
 .setrow .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px;padding:8px 6px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;text-align:center;position:relative}
 .setrow .val small{font-family:var(--body);font-size:10px;color:var(--dim);position:absolute;right:6px;bottom:3px;letter-spacing:.08em}
@@ -133,6 +134,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .pad .rirrow{display:flex;gap:6px;margin-top:10px;align-items:center}
 .pad .rirrow .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);width:52px;height:38px;flex:none;border-radius:9px;background:var(--raised);border:1px solid var(--line2);font-weight:600}
 .pad .rirrow .chips{display:flex;gap:6px;flex:1}
+.chip.hardq{flex:1.4;font-size:12px}
 .chip{flex:1;height:38px;border-radius:9px;background:var(--bg2);border:1px solid var(--line);font-family:var(--mono);font-size:14px;color:var(--muted);display:grid;place-items:center}
 .chip.on{background:var(--gold);color:var(--gold-ink);border-color:var(--gold);font-weight:600}
 .pad .actions{display:flex;gap:10px;margin-top:12px}
@@ -567,7 +569,15 @@ function contribOf(name, muscle){
 }
 const fmtN = x => Number.isInteger(x) ? String(x) : x.toFixed(1);
 function tierOf(n){ return n<4?'below minimum':n<11?'4-10':n<19?'11-18':n<30?'19-29':'30+'; }
-function hardSetsWeek(muscle, wk){ const end=addDaysISO(wk,7); let t=0; for(const s of state.sets){ if(s.date<wk || s.date>=end || !(+s.reps>0) || s.rir==null || +s.rir>3) continue; const w=contribOf(s.exercise, s.muscle)[muscle]; if(w) t+=w; } return Math.round(t*10)/10; }
+// Hard set = RIR logged and ≤3, OR marked "hard, unsure", OR (no RIR) within reach of the recent best on that lift:
+// each rep is ~3% of e1RM (Epley), so ≥90% of the 8-week best e1RM ≈ RIR 3 or closer; for sets over 12 reps, ≥85% of the best reps at that weight.
+function inferredHard(s){
+  const since=addDaysISO(s.date,-56); const xs=exSets(s.exercise).filter(x=>x.unit===s.unit && x.date>=since && x.date<=s.date && +x.reps>0);
+  if(+s.reps>12){ const w=fmtW(s.weight); const best=Math.max(0,...xs.filter(x=>fmtW(x.weight)===w).map(x=>+x.reps)); return best>0 && +s.reps>=0.85*best; }
+  const bestE=Math.max(0,...xs.filter(x=>!lowConf(x.reps,x.rir)).map(x=>e1rm(+x.weight,+x.reps))); return bestE>0 && e1rm(+s.weight,+s.reps)>=0.9*bestE;
+}
+function isHard(s){ if(!(+s.reps>0)) return false; if(s.rir!=null) return +s.rir<=3; if(s.comment==='hard?') return true; return inferredHard(s); }
+function hardSetsWeek(muscle, wk){ const end=addDaysISO(wk,7); let t=0; for(const s of state.sets){ if(s.date<wk || s.date>=end || !isHard(s)) continue; const w=contribOf(s.exercise, s.muscle)[muscle]; if(w) t+=w; } return Math.round(t*10)/10; }
 function plannedWeekly(plan, muscle){ return Math.round(10*plan.data.days.reduce((a,d)=>a+d.slots.reduce((b,s,i)=>{ const w=contribOf(slotExercise(s), s.muscle)[muscle]||0; return b+(w?Math.max(1,(s.sets||3)+volAdj(d.key+':'+i))*w:0); },0),0))/10; }
 function pickSlot(plan, muscle, delta){
   let best=null;
@@ -741,7 +751,7 @@ function render(){
       ${slot.logged?'':`<div class="prescribe"><button class="plan" data-sets="${esc(slot.key)}" title="Adjust planned sets"><b>${planned}</b> × ${esc(slot.reps||'8-12')}</button>${volAdj(slot.key)?`<span class="over">${volAdj(slot.key)>0?'+':''}${volAdj(slot.key)} auto</span>`:''}${slot.recCut?'<span class="over" style="color:var(--red)">−1 · not recovered</span>':''}${over?`<span class="over">+${over} over plan</span>`:''}${prevOver&&!mine.length?`<button class="suggest" data-trim="${esc(slot.key)}">−${prevOver} set suggested</button>`:''}${plat?`<button class="plat" data-plat="${esc(slot.key)}">plateau · 3 sessions flat</button>`:''}${slot.note?`<span class="note">${esc(slot.note)}</span>`:''}</div>`}
       <div class="last">${best.set?`<span class="chip best">best ${fmtW(best.set.weight)}×${best.set.reps} · e1RM ${best.e1}</span>`:'<span class="chip">no history</span>'}${last.map(l=>`<span class="chip" title="${l.date}">${l.date.slice(5)}: ${l.sets.map(s=>fmtW(s.weight)+'×'+s.reps).join(' · ')}</span>`).join('')}</div>
       <div class="sets">
-        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
+        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.rir==null && isHard(s)?'<span class="ss hardtag">hard</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
         ${!slot.logged && mine.length<planned?`<div class="setrow ghost"><div class="n">${mine.length+1}</div><div class="val ${ts?'tgt':''}">${ts?fmtW(ts.w):'—'}</div><div class="val ${ts?'tgt':''}">${ts?ts.r:'—'}</div><div class="rir">${ts?'target':'—'}</div><div></div></div>`:''}
       </div>
       <div class="addset"><button class="add" data-add="${esc(slot.key)}"><span class="plus">+</span> Log set ${mine.length+1}</button><button class="unit ${unit}" data-unit="${esc(name)}">${unit}</button></div>
@@ -909,7 +919,7 @@ function ensureSession(day){
   if(!w){ const at=new Date(D+'T12:00:00').toISOString(); w={id:uid(), date:D, plan_id:plan.id, day_key:day.key, day_name:day.name, note:null, source:'app-backfill', started_at:at, finished_at:at}; state.workouts.unshift(w); persist(); enqueue({t:'wo.insert', row:w}); }
   return {workoutId:w.id, date:D, dayKey:w.day_key, dayName:w.day_name, planId:w.plan_id, notes:parseNotes(w)};
 }
-let pad={day:null, slot:null, name:'', unit:'kg', rir:null, rpe:null, wStep:5, target:null, why:''};
+let pad={day:null, slot:null, name:'', unit:'kg', rir:null, rpe:null, hard:false, wStep:5, target:null, why:''};
 // ± follows the number: a whole number moves 5, a half-plate number (22.5) moves 2.5.
 const stepFor = v => { const n=+v; return (n && Math.round(n*10)%10!==0) ? 2.5 : 5; };
 function padTarget(){ const D=curDate(); const mine=daySets(D).filter(s=>s.exercise===pad.name); const t=targetFor(pad.slot,pad.name,pad.unit,D); pad.target=targetSet(t, mine.length); pad.why=t?t.why:''; }
@@ -917,7 +927,7 @@ function openPad(day, slot){
   if(!slot) return;
   const D=curDate(); const name=slotExercise(slot); const unit=exUnit(name);
   if(D===todayISO()){ const lastSet=sessionSets().slice(-1)[0]; const fresh=!lastSet || (Date.now()-new Date(lastSet.created_at).getTime())>=SESSION_GAP; const muscles=[...new Set(day.slots.map(x=>x.muscle))]; if(fresh && state.settings.recSkip!==D && !muscles.every(m=>recoveryFor(D,m))){ recoverySheet(day,true,()=>openPad(day,slot)); return; } }
-  pad={day, slot, name, unit, rir:null, rpe:null, wStep:5, target:null, why:''};
+  pad={day, slot, name, unit, rir:null, rpe:null, hard:false, wStep:5, target:null, why:''};
   const mine=daySets(D).filter(s=>s.exercise===name); const lastMine=mine[mine.length-1];
   padTarget(); const ts=pad.target;
   const prev=exLastSessions(name,1,D)[0]; const prevSet=prev?prev.sets[Math.min(mine.length, prev.sets.length-1)]:null;
@@ -935,8 +945,8 @@ function renderUnit(){ const b=$('#padUnit'); b.textContent=pad.unit; b.classNam
 function renderRir(){
   const mode=state.settings.mode||'rir'; $('#rirLbl').textContent=mode.toUpperCase();
   const vals = mode==='rir'?[0,1,2,3,4]:[6,7,8,9,10]; const cur = mode==='rir'?pad.rir:pad.rpe;
-  $('#rirChips').innerHTML = vals.map(v=>`<button class="chip ${cur===v?'on':''}" data-v="${v}">${v}</button>`).join('');
-  $$('#rirChips .chip').forEach(c=>{ c.onpointerdown=e=>e.preventDefault(); c.onclick=()=>{ const v=+c.dataset.v; if(mode==='rir'){ pad.rir=(pad.rir===v?null:v); pad.rpe=pad.rir==null?null:10-pad.rir; } else { pad.rpe=(pad.rpe===v?null:v); pad.rir=pad.rpe==null?null:10-pad.rpe; } renderRir(); }; });
+  $('#rirChips').innerHTML = vals.map(v=>`<button class="chip ${cur===v?'on':''}" data-v="${v}">${v}</button>`).join('')+`<button class="chip hardq ${pad.hard?'on':''}" data-v="hard" title="Hard, not sure how close">hard?</button>`;
+  $$('#rirChips .chip').forEach(c=>{ c.onpointerdown=e=>e.preventDefault(); c.onclick=()=>{ if(c.dataset.v==='hard'){ pad.hard=!pad.hard; if(pad.hard){ pad.rir=null; pad.rpe=null; } renderRir(); return; } pad.hard=false; const v=+c.dataset.v; if(mode==='rir'){ pad.rir=(pad.rir===v?null:v); pad.rpe=pad.rir==null?null:10-pad.rir; } else { pad.rpe=(pad.rpe===v?null:v); pad.rir=pad.rpe==null?null:10-pad.rpe; } renderRir(); }; });
 }
 function updateHint(){
   const w=+$('#padW').value, r=+$('#padR').value; const el=$('#padHint');
@@ -972,7 +982,7 @@ $('#padLog').onclick=()=>{
   const kind=prKind(pad.name,pad.unit,w,r,null,pad.rir); const is_pr=isPR(kind);
   const now=new Date(); const rest_s=prevAny?Math.max(0,Math.round((now-new Date(prevAny.created_at))/1000)):null;
   const note=$('#padNote').value.trim()||null; const tg=pad.target;
-  const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:null, note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
+  const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:pad.hard?'hard?':null, note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
   state.sets.push({...row,_local:true}); persist(); enqueue({t:'set.insert', row});
   if(is_pr) firePR(); else if(navigator.vibrate) navigator.vibrate(15);
   const hit = tg && w>=tg.w && r>=tg.r;
@@ -987,9 +997,11 @@ function setDetail(id){
   const rest=s.rest_s!=null?s.rest_s:(s.source==='app'&&prev&&s.created_at&&prev.created_at?Math.round((new Date(s.created_at)-new Date(prev.created_at))/1000):null);
   const mode=state.settings.mode||'rir';
   modal(`${s.exercise} · set ${s.set_no||''}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Rest before</div><div class="v">${rest!=null?fmtDur(rest):'—'}</div></div><div class="tile"><div class="k">Target</div><div class="v">${s.target_weight!=null?fmtW(s.target_weight)+'×'+s.target_reps:'—'}</div></div><div class="tile"><div class="k">e1RM</div><div class="v">${e1rm(+s.weight,+s.reps)}${s.is_pr?' <span class="prflag">PR</span>':''}</div></div></div>
-    <div class="form"><div class="row"><label>Weight · ${s.unit}<input id="dW" type="number" inputmode="decimal" step="0.5" value="${fmtW(s.weight)}"></label><label>Reps<input id="dR" type="number" inputmode="numeric" value="${s.reps}"></label><label>${mode.toUpperCase()}<input id="dE" type="number" inputmode="numeric" value="${mode==='rir'?(s.rir==null?'':s.rir):(s.rpe==null?'':s.rpe)}" placeholder="—"></label></div>
+    <div class="form"><div class="row"><label>Weight · ${s.unit}<input id="dW" type="number" inputmode="decimal" step="0.5" value="${fmtW(s.weight)}"></label><label>Reps<input id="dR" type="number" inputmode="numeric" value="${s.reps}"></label></div><input id="dE" type="hidden" value="${mode==='rir'?(s.rir==null?'':s.rir):(s.rpe==null?'':s.rpe)}"><input id="dH" type="hidden" value="${s.comment==='hard?'?'1':''}"><div class="rirrow" style="margin-top:8px"><div class="lbl" style="display:grid;place-items:center">${mode.toUpperCase()}</div><div class="chips" id="dChips">${(mode==='rir'?[0,1,2,3,4]:[6,7,8,9,10]).map(v=>`<button type="button" class="chip ${(mode==='rir'?s.rir:s.rpe)===v?'on':''}" data-dv="${v}">${v}</button>`).join('')}<button type="button" class="chip hardq ${s.comment==='hard?'?'on':''}" data-dv="hard">hard?</button></div></div>
     <label>Note for this set<textarea id="dN" placeholder="Felt heavy, grip went, slow eccentric…">${esc(s.note||'')}</textarea></label></div></div>`,
-    [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this set?')) return; state.sets=state.sets.filter(x=>x.id!==id); persist(); enqueue({t:'set.delete', id}); render(); }},{t:'Save',gold:true,fn:()=>{ const w=+$('#dW').value, r=+$('#dR').value; const ev=$('#dE').value===''?null:+$('#dE').value; const body={weight:w,reps:r,note:$('#dN').value.trim()||null}; if(mode==='rir'){ body.rir=ev; body.rpe=ev==null?null:10-ev; } else { body.rpe=ev; body.rir=ev==null?null:10-ev; } body.is_pr=isPR(prKind(s.exercise,s.unit,w,r,id,body.rir)); Object.assign(s, body); persist(); enqueue({t:'set.update', id, body}); render(); }}]);
+    [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this set?')) return; state.sets=state.sets.filter(x=>x.id!==id); persist(); enqueue({t:'set.delete', id}); render(); }},{t:'Save',gold:true,fn:()=>{ const w=+$('#dW').value, r=+$('#dR').value; const ev=$('#dE').value===''?null:+$('#dE').value; const body={weight:w,reps:r,note:$('#dN').value.trim()||null, comment:$('#dH').value==='1'?'hard?':null}; if(mode==='rir'){ body.rir=ev; body.rpe=ev==null?null:10-ev; } else { body.rpe=ev; body.rir=ev==null?null:10-ev; } body.is_pr=isPR(prKind(s.exercise,s.unit,w,r,id,body.rir)); Object.assign(s, body); persist(); enqueue({t:'set.update', id, body}); render(); }}]);
+  $$('#dChips .chip').forEach(c=>c.onclick=()=>{ const v=c.dataset.dv; const E=$('#dE'), H=$('#dH'); if(v==='hard'){ const on=H.value!=='1'; H.value=on?'1':''; if(on) E.value=''; } else { const same=E.value===v; E.value=same?'':v; if(!same) H.value=''; } $$('#dChips .chip').forEach(x=>x.classList.toggle('on', x.dataset.dv==='hard'?H.value==='1':(E.value!=='' && x.dataset.dv===E.value))); });
+  $$('#dW, #dR').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); });
   $$('#modal input[type=number]').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); i.onclick=()=>i.select(); });
 }
 
@@ -1261,7 +1273,7 @@ function pageVolume(B,T,A){
   T.textContent='Volume'; const plan=activePlan(); const f=focusOf(plan); const wk=weekStartISO(); const V=state.volume||{};
   const muscles=[...new Set([...Object.keys(f), ...plan.data.days.flatMap(d=>d.slots.map(s=>s.muscle))])];
   const weeks=[3,2,1,0].map(i=>addDaysISO(wk,-7*i)); const since=addDaysISO(wk,-14);
-  B.innerHTML = `<div class="empty" style="padding:0 0 14px;text-align:left">Fractional hard sets per week: a direct set counts 1, an indirect set counts 0.5 for the muscles it helps (a chest press adds 0.5 to triceps and shoulders, a row adds 0.5 to biceps). Only sets logged at RIR 3 or closer count; no RIR is not hard. Tiers from Pelland 2025: 4 is the minimum effective dose, then 5-10, 11-18, 19-29, 30+ with diminishing returns and no cliff. Every Monday a <b>focus</b> muscle gains a set if it was fully recovered at every session and nothing stalled. Any muscle loses a set after one “not recovered” or two “partly”.</div>
+  B.innerHTML = `<div class="empty" style="padding:0 0 14px;text-align:left">Fractional hard sets per week: a direct set counts 1, an indirect set counts 0.5 for the muscles it helps (a chest press adds 0.5 to triceps and shoulders, a row adds 0.5 to biceps). A set counts as hard when its RIR is 3 or closer, when it is marked “hard?”, or — with no RIR logged — when it lands within 90% of your best e1RM on that lift in the last 8 weeks (each rep is ~3% of e1RM, so that is RIR 3 or closer); sets over 12 reps count when they reach 85% of your best reps at that weight. Tiers from Pelland 2025: 4 is the minimum effective dose, then 5-10, 11-18, 19-29, 30+ with diminishing returns and no cliff. Every Monday a <b>focus</b> muscle gains a set if it was fully recovered at every session and nothing stalled. Any muscle loses a set after one “not recovered” or two “partly”.</div>
   ${muscles.map(m=>{ const isF=f[m]!=null; const counts=weeks.map(w=>hardSetsWeek(m,w)); const mx=Math.max(1,...counts,f[m]||0); const planned=plannedWeekly(plan,m);
     const rec=(state.recovery||[]).filter(r=>r.muscle===m && r.date>=since); const tally=['full','partial','not'].map(v=>rec.filter(r=>r.status===v).length);
     const rirs=state.sets.filter(s=>s.muscle===m && s.date>=since && s.rir!=null).map(s=>+s.rir); const avgRir=rirs.length?(rirs.reduce((a,b)=>a+b,0)/rirs.length).toFixed(1):'—';

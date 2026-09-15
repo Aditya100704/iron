@@ -94,6 +94,8 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .setrow .n{font-family:var(--display);font-size:20px;color:var(--dim);text-align:center}
 .setrow.pr .n{color:var(--gold)}
 .setrow.lc .n::after{content:'~';color:var(--muted);font-size:11px;margin-left:2px}
+.setrow .ss{color:var(--gold);font-size:13px;margin-left:5px}
+.daymeta .clock{cursor:pointer;border-bottom:1px dotted var(--muted)}
 .setrow .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px;padding:8px 6px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;text-align:center;position:relative}
 .setrow .val small{font-family:var(--body);font-size:10px;color:var(--dim);position:absolute;right:6px;bottom:3px;letter-spacing:.08em}
 .setrow .rir{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center;padding:6px 4px;background:var(--bg2);border:1px solid var(--line);border-radius:9px}
@@ -123,8 +125,10 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .unitbtn.lb{color:var(--blue);border-color:#2d4262}
 .pad .padnote{width:100%;margin-top:10px;min-height:0;height:42px;padding:8px 12px;font-size:14px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
 .pad .field .row{display:flex;align-items:center;gap:6px}
-.pad .field input{border:0;background:transparent;padding:2px 0;font-size:34px;font-family:var(--display);letter-spacing:.02em;width:100%;min-height:0;height:44px;color:var(--text);text-align:center}
-.pad .field .step{width:40px;height:40px;border-radius:10px;background:var(--raised);color:var(--muted);font-size:20px;display:grid;place-items:center;flex:none}
+.pad .field input{border:0;background:transparent;padding:0;font-size:30px;font-family:var(--display);letter-spacing:0;flex:1 1 0;min-width:0;width:auto;min-height:0;height:44px;color:var(--text);text-align:center;appearance:textfield;-moz-appearance:textfield}
+.pad .field input::-webkit-outer-spin-button,.pad .field input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.pad .field{min-width:0}
+.pad .field .step{width:34px;height:38px;border-radius:10px;background:var(--raised);color:var(--muted);font-size:20px;display:grid;place-items:center;flex:none}
 .pad .field .step:active{background:var(--line2);color:var(--text)}
 .pad .rirrow{display:flex;gap:6px;margin-top:10px;align-items:center}
 .pad .rirrow .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);width:52px;height:38px;flex:none;border-radius:9px;background:var(--raised);border:1px solid var(--line2);font-weight:600}
@@ -458,6 +462,10 @@ function curDate(){ return state.viewDate||todayISO(); }
 const SESSION_GAP = 60*60*1000; // a set more than an hour after the last one starts a new session
 const isoOf = x => x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");
 function daySets(d){ return state.sets.filter(s=>s.date===d).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); }
+// Superset detection from timestamps: A-B-A within 4 minutes, or two different exercises logged within 90 s of each other.
+function supersetMap(sets){ const m={}; const t=x=>new Date(x.created_at||0).getTime(); for(let i=1;i<sets.length;i++){ const a=sets[i-1], b=sets[i]; if(a.exercise!==b.exercise && (t(b)-t(a))/1000<=90){ m[a.id]=b.exercise; m[b.id]=a.exercise; } if(i<sets.length-1){ const c=sets[i+1]; if(a.exercise!==b.exercise && a.exercise===c.exercise && (t(b)-t(a))/1000<=240 && (t(c)-t(b))/1000<=240){ m[a.id]=b.exercise; m[b.id]=a.exercise; m[c.id]=b.exercise; } } } return m; }
+function isSupersetNow(){ const ss=sessionSets(); if(ss.length<2) return false; const m=supersetMap(ss); return !!m[ss[ss.length-1].id]; }
+function avgRest(name){ const xs=exSets(name); const byDay={}; xs.forEach(x=>(byDay[x.date]=byDay[x.date]||[]).push(x)); let rests=[]; Object.keys(byDay).forEach(d=>{ const ds=daySets(d); const m=supersetMap(ds); byDay[d].forEach(x=>{ if(!m[x.id] && x.rest_s>=15 && x.rest_s<=600) rests.push(+x.rest_s); }); }); if(!rests.length) return null; rests.sort((a,b)=>a-b); return {median:rests[Math.floor(rests.length/2)], n:rests.length}; }
 function parseNotes(w){ try{ return w&&w.note?JSON.parse(w.note):{}; }catch(e){ return {}; } }
 function workoutFor(d){
   const ws=state.workouts.filter(w=>w.date===d); if(!ws.length) return null;
@@ -500,6 +508,14 @@ function plannedSets(slot){
   return Math.max(1,n);
 }
 function sessionSets(){ if(!state.session) return []; return state.sets.filter(s=>s.workout_id===state.session.workoutId).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); }
+function closeSession(endAt){ if(!state.session) return; const id=state.session.workoutId; enqueue({t:'wo.update', id, body:{finished_at:endAt, note:JSON.stringify(state.session.notes||{})}}); const w=state.workouts.find(x=>x.id===id); if(w) w.finished_at=endAt; state.session=null; state.viewDay=null; persist(); }
+function sessionSheet(){
+  if(!state.session) return; const ss=sessionSets(); const span=sessionSpan(); const prs=ss.filter(x=>x.is_pr).length; const ton=Math.round(ss.reduce((a,x)=>a+(+x.weight||0)*(+x.reps||0),0));
+  const live=span && (Date.now()-span.last)<SESSION_GAP; const dur=span?fmtDur(((live?Date.now():span.last)-span.start)/1000):'—';
+  const rests=ss.map(x=>+x.rest_s).filter(r=>r>=15 && r<=600); const avgRest=rests.length?fmtDur(rests.reduce((a,b)=>a+b,0)/rests.length):'—';
+  modal(`Session · ${esc(state.session.dayName||'')}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Time</div><div class="v">${dur}</div></div><div class="tile"><div class="k">Sets</div><div class="v">${ss.length}</div></div><div class="tile"><div class="k">PRs</div><div class="v">${prs}</div></div><div class="tile"><div class="k">Avg rest</div><div class="v">${avgRest}</div></div></div><div class="empty" style="text-align:left;padding:8px 0 0">${ton?ton.toLocaleString()+' tonnage · ':''}Finishing stamps the end at your last set, not at now. A gap of more than an hour finishes it on its own.</div></div>`,
+    [{t:'Close'},{t:'Discard',red:true,fn:()=>{ if(!confirm('Discard the open session? Logged sets stay in history.')) return; state.session=null; state.viewDay=null; persist(); stopRest(); render(); }},{t:'Finish session',gold:true,fn:()=>{ const endAt=ss.length?ss[ss.length-1].created_at:new Date().toISOString(); closeSession(endAt); stopRest(); toast(`Session finished · ${ss.length} sets · ${dur}`, true); render(); }}]);
+}
 function sessionSpan(){ const ss=sessionSets(); if(!ss.length) return null; return {start:new Date(ss[0].created_at).getTime(), last:new Date(ss[ss.length-1].created_at).getTime()}; }
 
 /* ================= TARGETS · double progression from your last session ================= */
@@ -689,7 +705,7 @@ function render(){
   if(!state.viewDay) state.viewDay = nextDayKey(plan, D);
   if(state.viewDay==='__rest'){ renderRest(D, today, days); return; }
   const day = days.find(d=>d.key===state.viewDay) || days[0];
-  const ds = daySets(D); const span = today?sessionSpan():null; const liveSess = !!span && (Date.now()-span.last) < SESSION_GAP;
+  const ds = daySets(D); const ssMap=supersetMap(ds); const span = today?sessionSpan():null; const liveSess = !!span && (Date.now()-span.last) < SESSION_GAP;
   const dLabel = new Date(D+'T00:00').toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'short'});
   const short = new Date(D+'T00:00').toLocaleDateString('en-GB',{day:'numeric', month:'short'});
   const slots=slotsFor(day); const planSlots=slots.filter(s=>!s.logged); const notes=notesFor(D);
@@ -725,7 +741,7 @@ function render(){
       ${slot.logged?'':`<div class="prescribe"><button class="plan" data-sets="${esc(slot.key)}" title="Adjust planned sets"><b>${planned}</b> × ${esc(slot.reps||'8-12')}</button>${volAdj(slot.key)?`<span class="over">${volAdj(slot.key)>0?'+':''}${volAdj(slot.key)} auto</span>`:''}${slot.recCut?'<span class="over" style="color:var(--red)">−1 · not recovered</span>':''}${over?`<span class="over">+${over} over plan</span>`:''}${prevOver&&!mine.length?`<button class="suggest" data-trim="${esc(slot.key)}">−${prevOver} set suggested</button>`:''}${plat?`<button class="plat" data-plat="${esc(slot.key)}">plateau · 3 sessions flat</button>`:''}${slot.note?`<span class="note">${esc(slot.note)}</span>`:''}</div>`}
       <div class="last">${best.set?`<span class="chip best">best ${fmtW(best.set.weight)}×${best.set.reps} · e1RM ${best.e1}</span>`:'<span class="chip">no history</span>'}${last.map(l=>`<span class="chip" title="${l.date}">${l.date.slice(5)}: ${l.sets.map(s=>fmtW(s.weight)+'×'+s.reps).join(' · ')}</span>`).join('')}</div>
       <div class="sets">
-        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
+        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
         ${!slot.logged && mine.length<planned?`<div class="setrow ghost"><div class="n">${mine.length+1}</div><div class="val ${ts?'tgt':''}">${ts?fmtW(ts.w):'—'}</div><div class="val ${ts?'tgt':''}">${ts?ts.r:'—'}</div><div class="rir">${ts?'target':'—'}</div><div></div></div>`:''}
       </div>
       <div class="addset"><button class="add" data-add="${esc(slot.key)}"><span class="plus">+</span> Log set ${mine.length+1}</button><button class="unit ${unit}" data-unit="${esc(name)}">${unit}</button></div>
@@ -757,6 +773,7 @@ function render(){
   const vo=$('#volOk'); if(vo) vo.onclick=()=>{ state.settings.volSeen[weekStartISO()]=true; persist(); render(); };
   const dy=$('#deloadYes'); if(dy) dy.onclick=()=>{ state.settings.deload[weekStartISO()]=true; persist(); toast('Deload week: half the sets, same weights'); render(); };
   const dn=$('#deloadNo'); if(dn) dn.onclick=()=>{ state.settings.deloadNo[weekStartISO()]=true; persist(); render(); };
+  const ck=$('#clock'); if(ck) ck.onclick=sessionSheet;
   clearInterval(clockT); if(span && liveSess){ clockT=setInterval(()=>{ const c=$('#clock'); if(c) c.textContent=fmtDur((Date.now()-span.start)/1000); },1000); }
 }
 function goDate(d){ state.viewDate = d===todayISO()?null:d; state.viewDay=null; render(); }
@@ -923,7 +940,8 @@ function renderRir(){
 }
 function updateHint(){
   const w=+$('#padW').value, r=+$('#padR').value; const el=$('#padHint');
-  const tg=pad.target?`<span class="tg">Target ${fmtW(pad.target.w)} × ${pad.target.r}</span> · ${esc(pad.why)}`:'';
+  const mineH=daySets(curDate()).filter(s=>s.exercise===pad.name); const lastH=mineH[mineH.length-1];
+  const tg=lastH?`<span class="tg">Last set ${fmtW(lastH.weight)} × ${lastH.reps}${lastH.rir!=null?' · RIR '+lastH.rir:''}</span>`:(pad.target?`<span class="tg">Target ${fmtW(pad.target.w)} × ${pad.target.r}</span> · ${esc(pad.why)}`:'');
   if(!w||!r){ el.innerHTML=tg; return; }
   const kind=prKind(pad.name, pad.unit, w, r, null, pad.rir); const b=exBest(pad.name,pad.unit); const e=e1rm(w,r); let msg;
   if(lowConf(r,pad.rir)){ el.innerHTML=`${tg}${tg?' · ':''}<span style="color:var(--muted)">Over 15 reps at RIR ${pad.rir}: counts as a set, not as a strength estimate</span>`; return; }
@@ -960,7 +978,7 @@ $('#padLog').onclick=()=>{
   const hit = tg && w>=tg.w && r>=tg.r;
   const lbl={e1rm:'PR · e1RM '+e1rm(w,r), weight:'PR · heaviest ever', reps:'PR · most reps at '+fmtW(w)+pad.unit, first:'First time logged'}[kind];
   toast(lbl?`${lbl} · ${pad.name}`:`Set ${row.set_no} logged${hit?' · target hit':''}${today?'':' · '+D.slice(5)}`, is_pr||hit);
-  if(today && state.settings.restOn) startRest(state.settings.rest||90);
+  if(today && state.settings.restOn){ const ss=isSupersetNow(); startRest(ss ? (state.settings.ssRest||45) : (state.settings.rest||90)); if(ss) toast('Superset · short rest'); }
   closeLayer('pad'); render();
 }
 function setDetail(id){
@@ -992,15 +1010,17 @@ const SOUNDS={
   gong:[[0,196,1.2,'sine'],[0,392,.8,'triangle'],[0,587,.5,'sine']],
 };
 function play(name){ const notes=SOUNDS[name]; if(!notes||!notes.length) return; try{ const A=window.AudioContext||window.webkitAudioContext; const c=play.ctx||(play.ctx=new A()); if(c.state==='suspended') c.resume(); const t=c.currentTime; notes.forEach(([d,f,len,w])=>{ const o=c.createOscillator(), g=c.createGain(); o.type=w||'sine'; o.frequency.value=f; g.gain.setValueAtTime(0,t+d); g.gain.linearRampToValueAtTime(w==='square'?.12:.25,t+d+.02); g.gain.exponentialRampToValueAtTime(.001,t+d+len); o.connect(g).connect(c.destination); o.start(t+d); o.stop(t+d+len+.02); }); }catch(e){} }
-async function notify(title, body, tag){ const a=alertSettings(); if(!a.notify || !('Notification' in window) || Notification.permission!=='granted') return; try{ const reg=await navigator.serviceWorker.ready; reg.showNotification(title, {body, tag, vibrate:VIB[tag==='pr'?a.pr:a.pattern]||[], silent:(tag==='pr'?a.prSound:a.restSound)==='none', icon:document.querySelector('link[rel=icon]').href}); }catch(e){ try{ new Notification(title,{body,tag}); }catch(_){} } }
-function fireRestAlert(){ const a=alertSettings(); buzz(a.pattern); play(a.restSound); notify('Rest over','Next set.','rest'); }
+const LN = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.LocalNotifications) || null;
+let restScheduled=false;
+async function notify(title, body, tag){ const a=alertSettings(); if(!a.notify) return; if(LN()){ try{ await LN().schedule({notifications:[{id:tag==='pr'?2:1, title, body, schedule:{at:new Date(Date.now()+300)}}]}); }catch(e){ console.warn('ln',e); } return; } if(!('Notification' in window) || Notification.permission!=='granted') return; try{ const reg=await navigator.serviceWorker.ready; reg.showNotification(title, {body, tag, vibrate:VIB[tag==='pr'?a.pr:a.pattern]||[], silent:(tag==='pr'?a.prSound:a.restSound)==='none', icon:document.querySelector('link[rel=icon]').href}); }catch(e){ try{ new Notification(title,{body,tag}); }catch(_){} } }
+function fireRestAlert(){ const a=alertSettings(); buzz(a.pattern); play(a.restSound); if(!restScheduled) notify('Rest over','Next set.','rest'); restScheduled=false; }
 function firePR(name){ const a=alertSettings(); buzz(a.pr); play(a.prSound); }
-async function askNotify(){ if(!('Notification' in window)) return 'unsupported'; const r=await Notification.requestPermission(); return r; }
+async function askNotify(){ if(LN()){ try{ const r=await LN().requestPermissions(); return r.display==='granted'?'granted':'denied'; }catch(e){ return 'denied'; } } if(!('Notification' in window)) return 'unsupported'; const r=await Notification.requestPermission(); return r; }
 
 /* rest timer */
 let restT=null;
-function startRest(sec){ stopRest(); const el=document.createElement('div'); el.className='rest'; el.id='restEl'; el.innerHTML=`<div><div class="lbl">Rest</div><div class="t" id="restTxt">${sec}</div></div><div class="bar"><i id="restBar"></i></div><button id="restX">×</button>`; document.body.appendChild(el); const t0=Date.now(); $('#restX').onclick=stopRest; restT=setInterval(()=>{ const left=Math.max(0,sec-Math.floor((Date.now()-t0)/1000)); const m=Math.floor(left/60), s=left%60; $('#restTxt').textContent=m?`${m}:${String(s).padStart(2,'0')}`:String(s); $('#restBar').style.width=(100*(1-left/sec))+'%'; if(left<=0){ stopRest(); fireRestAlert(); toast('Rest over'); } },250); }
-function stopRest(){ clearInterval(restT); restT=null; const el=$('#restEl'); if(el) el.remove(); }
+function startRest(sec){ stopRest(); if(LN() && alertSettings().notify){ LN().schedule({notifications:[{id:1, title:'Rest over', body:'Next set.', schedule:{at:new Date(Date.now()+sec*1000)}}]}).then(()=>{ restScheduled=true; }).catch(()=>{}); } const el=document.createElement('div'); el.className='rest'; el.id='restEl'; el.innerHTML=`<div><div class="lbl">Rest</div><div class="t" id="restTxt">${sec}</div></div><div class="bar"><i id="restBar"></i></div><button id="restX">×</button>`; document.body.appendChild(el); const t0=Date.now(); $('#restX').onclick=stopRest; restT=setInterval(()=>{ const left=Math.max(0,sec-Math.floor((Date.now()-t0)/1000)); const m=Math.floor(left/60), s=left%60; $('#restTxt').textContent=m?`${m}:${String(s).padStart(2,'0')}`:String(s); $('#restBar').style.width=(100*(1-left/sec))+'%'; if(left<=0){ stopRest(); fireRestAlert(); toast('Rest over'); } },250); }
+function stopRest(){ clearInterval(restT); restT=null; const el=$('#restEl'); if(el) el.remove(); if(restScheduled && LN()){ LN().cancel({notifications:[{id:1}]}).catch(()=>{}); restScheduled=false; } }
 
 function noteModal(name, day){
   const D=curDate(); const cur=notesFor(D)[name]||'';
@@ -1069,7 +1089,7 @@ function pageWorkout(B,T,A,date){
 function pageExHist(B,T,A,name){
   T.textContent=name; const unit=exUnit(name);
   const sess=exLastSessions(name,80); const best=exBest(name,unit);
-  B.innerHTML = `<div class="kv"><div class="tile"><div class="k">Best e1RM</div><div class="v">${best.e1||'—'}<small>${unit}</small></div></div><div class="tile"><div class="k">Heaviest</div><div class="v">${best.w||'—'}<small>${unit}</small></div></div><div class="tile"><div class="k">Sessions</div><div class="v">${sess.length}</div></div></div>
+  B.innerHTML = `<div class="kv"><div class="tile"><div class="k">Best e1RM</div><div class="v">${best.e1||'—'}<small>${unit}</small></div></div><div class="tile"><div class="k">Heaviest</div><div class="v">${best.w||'—'}<small>${unit}</small></div></div><div class="tile"><div class="k">Sessions</div><div class="v">${sess.length}</div></div>${(()=>{ const r=avgRest(name); return r?`<div class="tile"><div class="k">Typical rest</div><div class="v" style="font-size:18px">${fmtDur(r.median)}<small>${r.n} sets</small></div></div>`:''; })()}</div>
     <div class="chartbox"><div class="cap"><span>e1RM per session</span><span>${unit}</span></div><canvas id="exChart"></canvas></div>
     <div class="section"><h4>Rep records by weight</h4><div class="last" style="padding:0 0 8px">${Object.keys(best.repsAt).sort((a,b)=>+b-+a).slice(0,10).map(k=>`<span class="chip">${k}×${best.repsAt[k]}</span>`).join('')||'<span class="chip">—</span>'}</div></div>
     <div class="list">${sess.map(s=>`<div class="item click" data-d="${s.date}"><div class="m"><div class="t">${s.date}</div><div class="s num">${s.sets.map(x=>fmtW(x.weight)+'×'+x.reps+(x.rir!=null?'@'+x.rir:'')).join(' · ')}</div></div><div class="v">${Math.max(...s.sets.map(x=>e1rm(+x.weight,+x.reps)))}</div></div>`).join('')}</div>`;
@@ -1266,7 +1286,7 @@ function pageCoach(B,T){
 function pageSettings(B,T){
   T.textContent='Settings'; const s=state.settings;
   B.innerHTML=`<div class="section"><h4>Effort scale</h4><div class="segs"><button class="${(s.mode||'rir')==='rir'?'on':''}" data-mode="rir">RIR (reps in reserve)</button><button class="${s.mode==='rpe'?'on':''}" data-mode="rpe">RPE (6–10)</button></div><div class="empty" style="text-align:left;padding:0 0 10px">Optional on every set. Both are stored; the other is derived (RPE = 10 − RIR).</div></div>
-    <div class="section"><h4>Rest timer</h4><div class="segs"><button class="${s.restOn?'on':''}" data-rest="on">On</button><button class="${!s.restOn?'on':''}" data-rest="off">Off</button></div><div class="segs">${[60,90,120,150,180,240].map(v=>`<button class="${(s.rest||90)===v?'on':''}" data-restsec="${v}">${v}s</button>`).join('')}</div><div class="empty" style="text-align:left;padding:0 0 10px">Actual rest between sets is always recorded from the clock, timer or not.</div></div>
+    <div class="section"><h4>Rest timer</h4><div class="segs"><button class="${s.restOn?'on':''}" data-rest="on">On</button><button class="${!s.restOn?'on':''}" data-rest="off">Off</button></div><div class="segs">${[60,90,120,150,180,240].map(v=>`<button class="${(s.rest||90)===v?'on':''}" data-restsec="${v}">${v}s</button>`).join('')}</div><div class="empty" style="text-align:left;padding:0 0 6px">Superset rest — used automatically when you alternate two exercises:</div><div class="segs">${[30,45,60,90].map(v=>`<button class="${(s.ssRest||45)===v?'on':''}" data-ssrest="${v}">${v}s</button>`).join('')}</div><div class="empty" style="text-align:left;padding:0 0 10px">Actual rest between sets is always recorded from the clock, timer or not. Supersets are detected from the timestamps (two exercises alternating, or logged within 90 s of each other).</div></div>
     ${isNative()?`<div class="section"><h4>Health Connect</h4><div class="empty" style="text-align:left;padding:0 0 8px">${state.health.avail==='NotInstalled'?'Health Connect is not installed on this phone.':state.health.avail==='NotSupported'?'This phone does not support Health Connect.':state.health.granted?'Connected. Steps, workouts, sleep, heart rate and weight are read every time the app opens.':'Not connected yet.'}${state.health.lastSync?' Last read '+new Date(state.health.lastSync).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'.':''}</div><div class="segs"><button id="hcSync">Read now (30 days)</button><button id="hcOpen">Open Health Connect</button></div></div>`:''}
     <div class="section"><h4>Alerts</h4><div class="empty" style="text-align:left;padding:0 0 8px">When the rest timer ends.</div>
       <div class="segs">${Object.keys(VIB).map(k=>`<button class="${alertSettings().pattern===k?'on':''}" data-vib="${k}">${k}</button>`).join('')}</div>
@@ -1287,6 +1307,7 @@ function pageSettings(B,T){
   $$('#pageBody [data-mode]').forEach(b=>b.onclick=()=>{ s.mode=b.dataset.mode; persist(); pageSettings(B,T); });
   $$('#pageBody [data-rest]').forEach(b=>b.onclick=()=>{ s.restOn=b.dataset.rest==='on'; persist(); pageSettings(B,T); });
   $$('#pageBody [data-restsec]').forEach(b=>b.onclick=()=>{ s.rest=+b.dataset.restsec; persist(); pageSettings(B,T); });
+  $$('#pageBody [data-ssrest]').forEach(b=>b.onclick=()=>{ s.ssRest=+b.dataset.ssrest; persist(); pageSettings(B,T); });
   const setA=patch=>{ s.alerts={...alertSettings(),...patch}; persist(); pageSettings(B,T); };
   $$('#pageBody [data-vib]').forEach(b=>b.onclick=()=>{ setA({pattern:b.dataset.vib}); buzz(b.dataset.vib); });
   $$('#pageBody [data-prv]').forEach(b=>b.onclick=()=>{ setA({pr:b.dataset.prv}); buzz(b.dataset.prv); });
@@ -1308,8 +1329,7 @@ function pageSettings(B,T){
 /* ================= BOOT ================= */
 if(!state.plans.length) state.plans=[{id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true}];
 if(state.session && state.session.date!==todayISO()){ // an unfinished session closes at its LAST SET, not at now
-  const id=state.session.workoutId; const ss=state.sets.filter(s=>s.workout_id===id).map(s=>s.created_at).filter(Boolean).sort(); const endAt=ss.length?ss[ss.length-1]:new Date().toISOString();
-  enqueue({t:'wo.update', id, body:{finished_at:endAt, note:JSON.stringify(state.session.notes||{})}}); const w=state.workouts.find(x=>x.id===id); if(w) w.finished_at=endAt; state.session=null; persist();
+  const id=state.session.workoutId; const ss=state.sets.filter(s=>s.workout_id===id).map(s=>s.created_at).filter(Boolean).sort(); closeSession(ss.length?ss[ss.length-1]:new Date().toISOString());
 }
 // any device: adopt today's workout as the live session so the phone and the laptop show the same day
 if(!state.session){ const w=[...state.workouts].filter(x=>x.date===todayISO()).sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''))[0]; if(w && !w.finished_at){ let notes={}; try{ notes=w.note?JSON.parse(w.note):{}; }catch(e){} state.session={workoutId:w.id,date:w.date,dayKey:w.day_key,dayName:w.day_name,planId:w.plan_id,notes,startedAt:w.started_at}; persist(); } }

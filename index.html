@@ -212,6 +212,21 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .datestrip{position:relative;display:flex;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 calc(-1 * var(--pad)) 14px;padding:2px var(--pad) 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .datestrip::-webkit-scrollbar{display:none}
 .healthline{color:var(--muted);font-size:13px;margin:-6px 0 12px;letter-spacing:.01em}.healthline b{color:var(--text);font-variant-numeric:tabular-nums}.healthline .warn{color:var(--gold)}
+.gal{position:fixed;inset:0;background:#000;z-index:60;display:none;flex-direction:column}
+.gal.on{display:flex}
+.gal .track{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.gal .track::-webkit-scrollbar{display:none}
+.gal .slide{flex:0 0 100vw;width:100vw;height:100%;scroll-snap-align:center;scroll-snap-stop:always;display:grid;place-items:center;position:relative}
+.gal .slide img{max-width:100vw;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none}
+.gal .slide .ph-ld{color:var(--muted);font-family:var(--mono);font-size:12px}
+.gal .galx{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:42px;height:42px;border-radius:50%;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:26px;line-height:1;display:grid;place-items:center;z-index:2}
+.gal .galbar{background:linear-gradient(transparent, rgba(0,0,0,.85));color:#fff;padding:14px 16px calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:10px;position:absolute;left:0;right:0;bottom:0;transition:opacity .2s}
+.gal.hide .galbar,.gal.hide .galx{opacity:0;pointer-events:none}
+.gal .galbar .t{flex:1;min-width:0}
+.gal .galbar .d{font-family:var(--display);font-size:20px;letter-spacing:.01em}
+.gal .galbar .n{font-size:13px;color:#cfcac0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gal .galbar .c{font-family:var(--mono);font-size:12px;color:#9a968c}
+.gal .galbar button{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:10px;min-height:38px;padding:0 12px;font-size:14px}
 .viewer{position:relative;display:flex;align-items:center;justify-content:center;background:#000;border-radius:12px;overflow:hidden;min-height:200px;max-height:70vh}
 .viewer img{max-width:100%;max-height:70vh;display:block;object-fit:contain;user-select:none;-webkit-user-drag:none}
 .viewer .vnav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border:0;border-radius:10px;background:rgba(0,0,0,.45);color:#fff;font-size:34px;line-height:1;display:grid;place-items:center}
@@ -340,6 +355,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
   </div>
 </div>
 
+<div class="gal" id="gal"><div class="track" id="galTrack"></div><button class="galx" id="galX" aria-label="Close">×</button><div class="galbar" id="galBar"></div></div>
 <div class="page" id="page"><div class="bar"><button class="back" id="pageBack">‹</button><h2 id="pageTitle"></h2><button class="act hidden" id="pageAct"></button></div><div class="body" id="pageBody"></div></div>
 
 <div class="modal" id="modal"><div class="box"><h3 id="modalTitle">Note</h3><div id="modalBody"></div><div class="acts" id="modalActs"></div></div></div>
@@ -1054,7 +1070,7 @@ try{ history.replaceState({l:0},''); }catch(e){}
 function modal(title, body, acts){ if(!$('#modal').classList.contains('on')) pushLayer('modal', ()=>$('#modal').classList.remove('on')); $('#modalTitle').textContent=title; $('#modalBody').innerHTML=body; $('#modalActs').innerHTML=acts.map((a,i)=>`<button class="btn sm ${a.gold?'gold':''} ${a.red?'red':''}" data-i="${i}">${a.t}</button>`).join(''); $$('#modalActs button').forEach(b=>b.onclick=()=>{ const a=acts[+b.dataset.i]; if(a.fn) a.fn(); if(!a.keep) closeModal(); }); $('#modal').classList.add('on'); }
 function closeModal(){ if($('#modal').classList.contains('on')) closeLayer('modal'); }
 $('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
-document.addEventListener('keydown', e=>{ if(!$('#modal').classList.contains('on')) return; if(e.key==='ArrowLeft'){ const b=$('#vPrev'); if(b&&!b.disabled) b.click(); } if(e.key==='ArrowRight'){ const b=$('#vNext'); if(b&&!b.disabled) b.click(); } });
+document.addEventListener('keydown', e=>{ const G=$('#gal'); if(!G.classList.contains('on')) return; const T=$('#galTrack'); if(e.key==='ArrowRight') T.scrollBy({left:T.clientWidth, behavior:'smooth'}); if(e.key==='ArrowLeft') T.scrollBy({left:-T.clientWidth, behavior:'smooth'}); if(e.key==='Escape') closeLayer('gallery'); });
 
 /* ================= MENU + PAGES ================= */
 const hideSheet=()=>{ $('#scrim').classList.remove('on'); $('#sheet').classList.remove('open'); };
@@ -1166,19 +1182,27 @@ async function pagePhotos(B,T,A){
 const PHOTO_SRC={};
 async function savePhoto(row){ if(state.online){ try{ await api.post('photos',[row]); return true; }catch(e){ console.warn('photo post',e); } } enqueue({t:'photo.insert', row}); return false; }
 async function photoSrc(id){ if(PHOTO_SRC[id]) return PHOTO_SRC[id]; try{ const r=await api.get(`photos?select=data_b64,mime&id=eq.${id}`); if(r[0]) PHOTO_SRC[id]=`data:${r[0].mime};base64,${r[0].data_b64}`; }catch(e){} return PHOTO_SRC[id]||''; }
-// viewer: newest → oldest is the page order; ‹ goes to the older photo, › to the newer one; swipe works the same way
+// full-screen gallery: one slide per photo, horizontal snap scrolling through the whole archive (newest on the left, swipe left for older)
+let galIdx=0, galIO=null;
 function photoDetail(id){
-  const list=state.photosMeta; let i=list.findIndex(x=>x.id===id); if(i<0) return;
-  const open=$('#modal').classList.contains('on');
-  const render=async()=>{ const p=list[i]; const src=await photoSrc(p.id); const dt=new Date(p.taken_at); const when=(p.note||'').includes('time unknown')?'':' · '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    $('#modalTitle').textContent=`${dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}${when} · ${list.length-i}/${list.length}`;
-    $('#modalBody').innerHTML=`<div class="viewer" id="viewer"><button class="vnav" id="vPrev" ${i<list.length-1?'':'disabled'}>‹</button><img src="${src}" alt=""><button class="vnav" id="vNext" ${i>0?'':'disabled'}>›</button></div><input id="phNote" placeholder="Note (fasted, window light, post-pump…)" value="${esc(p.note||'')}" style="width:100%;margin-top:10px">`;
-    $('#vPrev').onclick=()=>{ if(i<list.length-1){ i++; render(); } }; $('#vNext').onclick=()=>{ if(i>0){ i--; render(); } };
-    let x0=null; const v=$('#viewer'); v.ontouchstart=e=>{ x0=e.touches[0].clientX; }; v.ontouchend=e=>{ if(x0==null) return; const dx=e.changedTouches[0].clientX-x0; x0=null; if(dx<-40 && i<list.length-1){ i++; render(); } else if(dx>40 && i>0){ i--; render(); } };
-  };
-  const acts=[{t:'Delete',red:true,keep:true,fn:()=>{ const p=list[i]; if(!confirm('Delete this photo?')) return; enqueue({t:'photo.delete',id:p.id}); state.photosMeta=state.photosMeta.filter(x=>x.id!==p.id); closeModal(); openPage('photos', null, true); }},{t:'Save',gold:true,keep:true,fn:()=>{ const p=list[i]; const v=$('#phNote').value.trim(); api.patch('photos','id=eq.'+p.id,{note:v||null}).catch(()=>toast('Note not saved')); p.note=v; toast('Saved'); }},{t:'Close'}];
-  if(!open) modal('Photo', '', acts); else { $('#modalActs').innerHTML=acts.map((a,k)=>`<button class="btn sm ${a.gold?'gold':''} ${a.red?'red':''}" data-i="${k}">${a.t}</button>`).join(''); $$('#modalActs button').forEach(b=>b.onclick=()=>{ const a=acts[+b.dataset.i]; if(a.fn) a.fn(); if(!a.keep) closeModal(); }); }
-  render();
+  const list=state.photosMeta; galIdx=Math.max(0, list.findIndex(x=>x.id===id));
+  const G=$('#gal'), T=$('#galTrack'); G.classList.remove('hide');
+  T.innerHTML=list.map((p,i)=>`<div class="slide" data-i="${i}" data-id="${p.id}"><span class="ph-ld">…</span></div>`).join('');
+  if(!G.classList.contains('on')){ G.classList.add('on'); pushLayer('gallery', ()=>{ G.classList.remove('on'); if(galIO){ galIO.disconnect(); galIO=null; } T.innerHTML=''; if($('#page').classList.contains('open') && $('#pageTitle').textContent==='Photos') renderPage('photos'); }); }
+  const load=async(sl)=>{ if(sl.dataset.loaded) return; sl.dataset.loaded='1'; const src=await photoSrc(sl.dataset.id); if(src) sl.innerHTML=`<img src="${src}" alt="">`; else sl.innerHTML='<span class="ph-ld">could not load</span>'; };
+  if(galIO) galIO.disconnect();
+  galIO=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting){ const i=+e.target.dataset.i; galIdx=i; galBar(); [i-1,i,i+1,i+2].forEach(k=>{ const sl=T.children[k]; if(sl) load(sl); }); } }); }, {root:T, threshold:.6});
+  [...T.children].forEach(sl=>galIO.observe(sl));
+  T.scrollLeft = galIdx * T.clientWidth; requestAnimationFrame(()=>{ T.scrollLeft = galIdx * T.clientWidth; });
+  T.onclick=e=>{ if(e.target.tagName==='IMG' || e.target.classList.contains('slide')) G.classList.toggle('hide'); };
+  $('#galX').onclick=()=>closeLayer('gallery');
+  galBar();
+}
+function galBar(){
+  const list=state.photosMeta; const p=list[galIdx]; if(!p) return; const dt=new Date(p.taken_at); const noTime=(p.note||'').includes('time unknown');
+  $('#galBar').innerHTML=`<div class="t"><div class="d">${dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}${noTime?'':' · '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div><div class="n">${esc(p.note||'')}</div><div class="c">${list.length-galIdx} / ${list.length}</div></div><button id="galNote">Note</button><button id="galDel">Delete</button>`;
+  $('#galNote').onclick=()=>{ const v=prompt('Note for this photo', p.note||''); if(v==null) return; api.patch('photos','id=eq.'+p.id,{note:v.trim()||null}).catch(()=>toast('Note not saved')); p.note=v.trim(); galBar(); };
+  $('#galDel').onclick=()=>{ if(!confirm('Delete this photo?')) return; enqueue({t:'photo.delete',id:p.id}); state.photosMeta=state.photosMeta.filter(x=>x.id!==p.id); const T=$('#galTrack'); const sl=T.children[galIdx]; if(sl) sl.remove(); [...T.children].forEach((x,i)=>x.dataset.i=i); if(!state.photosMeta.length){ closeLayer('gallery'); openPage('photos', null, true); return; } galIdx=Math.min(galIdx, state.photosMeta.length-1); galBar(); toast('Deleted'); }
 }
 $('#photoIn').onchange=async e=>{
   const files=[...e.target.files]; if(!files.length) return; e.target.value='';

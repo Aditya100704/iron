@@ -1161,12 +1161,12 @@ async function pagePhotos(B,T,A){
 function photoDetail(id, src){ const p=state.photosMeta.find(x=>x.id===id)||{}; modal('Photo · '+(p.date||''), `<img src="${src}" style="width:100%;border-radius:12px;display:block;margin-bottom:10px"><input id="phNote" placeholder="Note (fasted, window light, post-pump…)" value="${esc(p.note||'')}" style="width:100%">`, [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this photo?')) return; enqueue({t:'photo.delete',id}); state.photosMeta=state.photosMeta.filter(x=>x.id!==id); openPage('photos'); }},{t:'Save',gold:true,fn:()=>{ const v=$('#phNote').value.trim(); api.patch('photos','id=eq.'+id,{note:v||null}).catch(()=>toast('Note not saved')); p.note=v; openPage('photos'); }}]); }
 $('#photoIn').onchange=async e=>{
   const files=[...e.target.files]; if(!files.length) return; e.target.value='';
-  toast('Saving '+files.length+'…');
+  let addedN=0, skippedDup=0, skippedDay=0; toast('Saving '+files.length+'…');
   for(const f of files){
-    try{ const b64=await shrink(f, 1280, .82); const row={id:uid(), date:todayISO(), taken_at:new Date(f.lastModified||Date.now()).toISOString(), mime:'image/jpeg', data_b64:b64, note:null}; enqueue({t:'photo.insert', row}); state.photosMeta.unshift({id:row.id,date:row.date,taken_at:row.taken_at,note:null}); }
+    try{ const when=new Date(f.lastModified||Date.now()); const d=isoLocal(when); const have=(state.photosMeta||[]); if(have.some(m=>Math.abs(new Date(m.taken_at)-when)<=3000)){ skippedDup=(skippedDup||0)+1; continue; } if(have.some(m=>m.date===d && (m.note||'').includes('time unknown'))){ skippedDay=(skippedDay||0)+1; continue; } const b64=await shrink(f, 1280, .82); const row={id:uid(), date:d, taken_at:when.toISOString(), mime:'image/jpeg', data_b64:b64, note:null}; enqueue({t:'photo.insert', row}); state.photosMeta.unshift({id:row.id,date:row.date,taken_at:row.taken_at,note:null}); addedN=(addedN||0)+1; }
     catch(err){ console.warn(err); toast('One photo failed'); }
   }
-  toast(files.length+' saved for today', true); openPage('photos');
+  const D0=todayISO(); const ds=[...new Set(state.photosMeta.slice(0,addedN).map(m=>m.date))].sort(); toast(`${addedN} saved${ds.length?' ('+(ds.length===1?(ds[0]===D0?'today':ds[0]):ds[0]+' → '+ds[ds.length-1])+')':''}${skippedDup?' · '+skippedDup+' already there':''}${skippedDay?' · '+skippedDay+' skipped (day has photos without a time)':''}`, true); openPage('photos', null, true);
 };
 function shrink(file, max, q){ return new Promise((res,rej)=>{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ const s=Math.min(1, max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg',q).split(',')[1]); }; img.onerror=rej; img.src=url; }); }
 

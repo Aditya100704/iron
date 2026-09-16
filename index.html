@@ -49,7 +49,9 @@ header.top{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg)
 .status.ok .dot{background:var(--green)} .status.off .dot{background:var(--red)} .status.busy .dot{background:var(--gold)}
 main{padding:0 var(--pad) calc(120px + var(--safe-b))}
 html,body{height:100%;overflow:hidden}
-#app{display:flex;flex-direction:column;height:100dvh;min-height:100vh}
+#app{display:flex;flex-direction:column;height:100dvh;min-height:0}
+html.kb .chatbar{padding-bottom:10px}
+html.kb main{padding-bottom:40px}
 header.top{flex:none}
 #pager{flex:1;min-height:0;overflow:hidden;position:relative}
 #pager .track{display:flex;width:300%;height:100%;transform:translateX(-33.3333%);transition:transform .28s cubic-bezier(.2,.8,.2,1);will-change:transform}
@@ -1662,6 +1664,7 @@ if(!CFG.key){
   fullSync().then(()=>{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
+(function(){ const vv=window.visualViewport; if(!vv) return; const app=$('#app'); const fit=()=>{ const kb=Math.max(0, innerHeight - vv.height - vv.offsetTop); app.style.height = vv.height+'px'; document.documentElement.classList.toggle('kb', kb>120); }; vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit(); })();
 if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 // photos shared from the gallery (Android share sheet → IRON): the native side queues them, the page saves them as progress photos
 async function drainSharedPhotos(){ const P=isNative() && Capacitor.Plugins && Capacitor.Plugins.IronShare; if(!P) return; try{ const r=await P.getPending(); const imgs=(r&&r.images)||[]; const D=todayISO(); let added=0, dup=0; const dates=new Set();

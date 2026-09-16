@@ -219,6 +219,32 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .datestrip{position:relative;display:flex;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 calc(-1 * var(--pad)) 14px;padding:2px var(--pad) 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .datestrip::-webkit-scrollbar{display:none}
 .healthline{color:var(--muted);font-size:13px;margin:-6px 0 12px;letter-spacing:.01em}.healthline b{color:var(--text);font-variant-numeric:tabular-nums}.healthline .warn{color:var(--gold)}
+.chatfab{position:fixed;left:16px;bottom:calc(18px + var(--safe-b));width:54px;height:54px;border-radius:50%;background:var(--surface);border:1px solid var(--line2);color:var(--gold);font-size:22px;display:grid;place-items:center;z-index:40;box-shadow:0 6px 24px rgba(0,0,0,.45)}
+.chatfab .n{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--gold);color:#111;font-family:var(--mono);font-size:11px;font-weight:700;display:grid;place-items:center}
+.chatfab.hidden{display:none}
+.confetti{position:fixed;inset:0;z-index:120;pointer-events:none}
+.chat{display:flex;flex-direction:column;gap:6px;padding:4px 0 96px}
+.chat .day{align-self:center;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin:10px 0 4px}
+.chat .bub{align-self:flex-end;max-width:86%;background:#1f2a1c;border:1px solid #2c3d28;border-radius:16px 16px 4px 16px;padding:9px 12px 7px;display:flex;gap:10px;align-items:flex-start;position:relative}
+.chat .bub.note{background:var(--surface);border-color:var(--line);border-radius:16px 16px 4px 16px}
+.chat .bub.done{background:var(--bg2);border-color:var(--line)}
+.chat .bub.done .tx{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--gold)}
+.chat .bub .ck{width:24px;height:24px;border-radius:50%;border:2px solid var(--gold);flex:none;display:grid;place-items:center;font-size:14px;color:#111;background:transparent;margin-top:1px}
+.chat .bub.done .ck{background:var(--gold);border-color:var(--gold)}
+.chat .bub .tx{white-space:pre-wrap;word-break:break-word;font-size:15.5px;line-height:1.35}
+.chat .bub .tm{font-family:var(--mono);font-size:10px;color:var(--dim);text-align:right;margin-top:3px}
+.chat .coach{align-self:flex-start;max-width:86%;background:#17150E;border:1px solid #4a3d13;border-radius:16px 16px 16px 4px;padding:9px 12px;color:var(--gold);font-size:14.5px;line-height:1.35}
+.chat .coach.big{background:#2a230f;border-color:var(--gold);font-family:var(--display);font-size:20px;letter-spacing:.01em}
+.chat .pin{position:sticky;top:0;z-index:2;background:var(--bg);padding:6px 0 8px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.chat .pin::-webkit-scrollbar{display:none}
+.chat .pin .p{flex:none;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:6px 12px;font-size:13px;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.chat .pin .p b{color:var(--gold);font-family:var(--mono);font-size:11px;margin-right:6px}
+.chatbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--bg);border-top:1px solid var(--line);padding:10px var(--pad) calc(10px + var(--safe-b));display:flex;gap:8px;align-items:flex-end}
+.chatbar textarea{flex:1;min-height:44px;max-height:120px;height:44px;resize:none;padding:11px 14px;border-radius:22px;background:var(--surface);border:1px solid var(--line2);color:var(--text);font-size:15.5px;line-height:1.3}
+.chatbar .send{width:44px;height:44px;border-radius:50%;background:var(--gold);color:#111;border:0;font-size:20px;display:grid;place-items:center;flex:none}
+.chatbar .send:disabled{opacity:.35}
+.chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
+.chatstat b{color:var(--gold)}
 .gal{position:fixed;inset:0;background:#000;z-index:95;display:none;flex-direction:column}
 .gal.on{display:flex}
 .gal .track{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -353,6 +379,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
     <button data-page="history"><span class="ic">▤</span><span class="t">History</span><span class="s">Every session, every set</span></button>
     <button data-page="charts"><span class="ic">▲</span><span class="t">Progress</span><span class="s">Volume, e1RM, PRs</span></button>
     <button data-page="diet"><span class="ic">◐</span><span class="t">Diet</span><span class="s">Tap your usuals, weigh-in</span></button>
+    <button data-page="notes"><span class="ic">✎</span><span class="t">Notes</span><span class="s">Message yourself, tick it off, get the shine</span></button>
     <button data-page="health"><span class="ic">♥</span><span class="t">Health</span><span class="s">Sleep, heart, swims from the band</span></button>
     <button data-page="volume"><span class="ic">◫</span><span class="t">Volume</span><span class="s">Specialization, recovery, auto sets</span></button>
     <button data-page="coach"><span class="ic">✦</span><span class="t">Coach</span><span class="s">Weekly notes from the coach</span></button>
@@ -363,6 +390,8 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
   </div>
 </div>
 
+<button class="chatfab" id="chatFab" aria-label="Notes"><span class="ic">✎</span><span class="n" id="chatBadge" hidden></span></button>
+<canvas id="confetti" class="confetti" hidden></canvas>
 <div class="gal" id="gal"><div class="track" id="galTrack"></div><button class="galx" id="galX" aria-label="Close">×</button><div class="galbar" id="galBar"></div></div>
 <div class="page" id="page"><div class="bar"><button class="back" id="pageBack">‹</button><h2 id="pageTitle"></h2><button class="act hidden" id="pageAct"></button></div><div class="body" id="pageBody"></div></div>
 
@@ -412,7 +441,7 @@ const state = {
   viewDay: null, photosMeta: [],
 };
 for(const k of ['swaps','units','extra','setsOv','swapsDay','platDismiss','deload','deloadNo','volSeen']) state.settings[k]=state.settings[k]||{};
-const persist = () => { LS.set('exercises',state.exercises); LS.set('sets',state.sets); LS.set('workouts',state.workouts); LS.set('plans',state.plans); LS.set('settings',state.settings); LS.set('queue',state.queue); LS.set('session',state.session); LS.set('lastSync',state.lastSync); LS.set('recovery',state.recovery); LS.set('notes',state.notes); LS.set('volume',state.volume); LS.set('foods',state.foods); LS.set('meals',state.meals); LS.set('body',state.body); };
+const persist = () => { LS.set('tasks',state.tasks); LS.set('exercises',state.exercises); LS.set('sets',state.sets); LS.set('workouts',state.workouts); LS.set('plans',state.plans); LS.set('settings',state.settings); LS.set('queue',state.queue); LS.set('session',state.session); LS.set('lastSync',state.lastSync); LS.set('recovery',state.recovery); LS.set('notes',state.notes); LS.set('volume',state.volume); LS.set('foods',state.foods); LS.set('meals',state.meals); LS.set('body',state.body); };
 function setStatus(cls, txt){ const el=$('#status'); el.className='status '+cls; $('#statusTxt').textContent=txt; }
 
 async function fullSync(){
@@ -425,14 +454,15 @@ async function fullSync(){
       api.get("workouts?select=id,date,plan_id,day_key,day_name,note,started_at,finished_at&order=date.desc&limit=500"),
       api.get("recovery?select=id,date,workout_id,muscle,status,created_at&order=date.desc&limit=1000"),
       api.get("coach_notes?select=id,created_at,week_start,title,body,read_at&order=created_at.desc&limit=30"),
-      api.get("settings?select=key,value&key=eq.volume"),
+      api.get("settings?select=key,value&key=in.(volume,tasks)"),
       api.get("food_items?select=name,slot,kcal,protein,uses,last_used,archived&order=uses.desc"),
       api.get("meals?select=id,date,slot,item,kcal,protein,qty,note,created_at&order=date.desc,created_at.asc&limit=1500"),
       api.get("body_metrics?select=date,weight,waist_above,waist_at,note&order=date.desc&limit=400"),
     ]);
     state.exercises = ex; state.workouts = wo; state.notes = notes;
     const pendingRec=new Set(state.queue.filter(op=>op.t==='rec.insert').map(op=>op.row.id)); state.recovery = rec.concat((state.recovery||[]).filter(r=>pendingRec.has(r.id) && !rec.some(x=>x.id===r.id)));
-    if(vol[0] && vol[0].value) state.volume = vol[0].value;
+    const volRow=vol.find(r=>r.key==='volume'); if(volRow && volRow.value) state.volume = volRow.value;
+    const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; const local=state.tasks||{items:[]}; const lt=local.updated||0, rt=remote.updated||0; if(rt>=lt) state.tasks=remote; else enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); LS.set('tasks', state.tasks); }
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
     try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&order=taken_at.desc&limit=2000'); }catch(e){}
@@ -675,6 +705,7 @@ function deloadCard(){ if(!deloadSuggested()) return ''; return `<div class="vol
 
 /* ================= HEALTH CONNECT (native app only) ================= */
 state.health = LS.get('health', {daily:{}, sessions:{}, lastSync:0, granted:false});
+state.tasks = LS.get('tasks', {items:[], updated:0, lineIdx:0});
 const isNative = () => !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const HC = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.HealthConnect) || null;
 const HC_TYPES=['Steps','Distance','ActiveCaloriesBurned','TotalCaloriesBurned','ExerciseSession','SleepSession','HeartRateSeries','RestingHeartRate','HeartRateVariabilityRmssd','OxygenSaturation','Vo2Max','Weight'];
@@ -727,6 +758,56 @@ function healthLine(D){
   return bits.length?`<div class="healthline">${bits.join(' · ')}</div>`:'';
 }
 
+/* ---- notes: a chat with yourself where every message is a task (Fogg's "shine" on every tick) ---- */
+const SHINE=[
+ 'Done. That is a rep nobody can take back.','Ticked. The list is lighter and you are heavier.','That one was sitting on you. Not any more.','Small box, real vote. You just voted for who you are.','Clean kill. Next.','Off the board. The day is yours a little more.','You said it, you did it. That gap is where trust lives.','One more brick. The wall does not care how you felt about it.','Done before the excuse finished loading.','That is what showing up looks like on paper.','Closed. Momentum is a thing you build, not a thing you wait for.','Ticked at full volume.','The thing you avoided is now the thing you did.','Another one in the jar.','Boxes do not lie. That one is green.','Good. The order was given and the order was executed.','Proof, not promises.','You just moved the runway.','That box has been open long enough. Shut.','Yes. THAT is the rep.','Nobody saw it. It still counts. It counts more.','Quiet win. Loud in the log.','Done is a decision. You made it.','The day wins by inches. That was an inch.','Ticked. Breathe. Next target.','Discipline looks boring from the outside. From here it looks like this.','Executed. No story attached.','One less thing between you and the man you are building.','That is how streaks start: one tick, no ceremony.','Filed. Feed the jar.'
+];
+const COMBO={3:'Three today. The engine is warm.',5:'Five. This is what a real day looks like.',7:'Seven. Stop looking for permission, you clearly have it.',10:'TEN. That is not a good day, that is a standard.',15:'Fifteen. Somebody tell the runway to hurry up.'};
+function tasksList(){ state.tasks=state.tasks||{items:[],updated:0,lineIdx:0}; if(!Array.isArray(state.tasks.items)) state.tasks.items=[]; return state.tasks.items; }
+function tasksSave(){ state.tasks.updated=Date.now(); persist(); enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); updateChatBadge(); }
+function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at); }
+function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
+function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }
+function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
+function pageNotes(B,T,A){
+  T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  const D=todayISO(); const doneToday=items.filter(t=>t.done_at && t.done_at.slice(0,10)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
+  A.textContent=showOpen?'All':'Open only'; A.className='act'; A.onclick=()=>{ state.settings.notesOpenOnly=!showOpen; persist(); pageNotes(B,T,A); };
+  const shown=showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items;
+  const older=open.filter(t=>t.created_at.slice(0,10)<D);
+  let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span></div>`;
+  if(older.length && !showOpen) html+=`<div class="chat"><div class="pin">${older.map(t=>`<button class="p" data-jump="${t.id}"><b>${new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</b>${esc(t.text)}</button>`).join('')}</div></div>`;
+  html+='<div class="chat" id="chat">';
+  let lastDay=''; shown.forEach(t=>{ const d=t.created_at.slice(0,10); if(d!==lastDay){ lastDay=d; html+=`<div class="day">${d===D?'Today':new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>`; }
+    const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    html+=`<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div><div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`;
+    if(t.shine && t.done_at && !showOpen) html+=`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; });
+  if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
+  html+='</div>';
+  html+=`<div class="chatbar" id="chatbar"><textarea id="chatIn" rows="1" placeholder="Message yourself… (a task, or ‑ a note)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="send" id="chatSend" disabled>▲</button></div>`;
+  B.innerHTML=html;
+  const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
+  ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } };
+  const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } tasksList().push({id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}); tasksSave(); ta.value=''; pageNotes(B,T,A); setTimeout(()=>{ $('#chatIn').focus(); },50); };
+  sb.onclick=send;
+  $$('#pageBody [data-tick]').forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
+  $$('#pageBody [data-tid]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
+  $$('#pageBody [data-jump]').forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
+  const P=$('#page'); P.scrollTop=P.scrollHeight;
+}
+function toggleTask(id, B,T,A){
+  const t=tasksList().find(x=>x.id===id); if(!t) return;
+  if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); pageNotes(B,T,A); return; }
+  t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && x.done_at.slice(0,10)===D).length;
+  t.shine = COMBO[n] ? {text:COMBO[n], big:true} : {text:shineLine(), big:false};
+  tasksSave(); pageNotes(B,T,A); confetti(); buzz('double'); play(COMBO[n]?'fanfare':'coin');
+  const el=$('#t-'+id); if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function taskMenu(id, B,T,A){
+  const t=tasksList().find(x=>x.id===id); if(!t) return;
+  modal(t.kind==='task'?'Task':'Note', `<div class="form"><label>Text<textarea id="tkTx">${esc(t.text)}</textarea></label></div>`,
+    [{t:'Delete',red:true,fn:()=>{ state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); pageNotes(B,T,A); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); pageNotes(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v){ t.text=v; tasksSave(); } pageNotes(B,T,A); }}]);
+}
 /* ---- health page ---- */
 const STAGE_NAMES={1:'awake',2:'asleep',3:'out of bed',4:'light',5:'deep',6:'REM',7:'awake in bed'};
 const hm = m => m==null?'—':`${Math.floor(m/60)}h ${String(Math.round(m%60)).padStart(2,'0')}`;
@@ -1100,17 +1181,19 @@ $('#fab').onclick=()=>{ $('#scrim').classList.add('on'); $('#sheet').classList.a
 $('#scrim').onclick=()=>closeLayer('sheet');
 $$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
 $('#pageBack').onclick=()=>closeLayer('page');
+$('#chatFab').onclick=()=>{ if($('#page').classList.contains('open') && $('#pageTitle').textContent==='Notes') return; openPage('notes'); };
 function openPage(kind, arg, replace){
-  pushLayer('page', ()=>{ const below=[...LAYERS].reverse().find(l=>l.kind==='page'); if(below) renderPage(below.data.kind, below.data.arg); else $('#page').classList.remove('open'); }, {kind, arg}, replace);
+  pushLayer('page', ()=>{ const below=[...LAYERS].reverse().find(l=>l.kind==='page'); if(below) renderPage(below.data.kind, below.data.arg); else { $('#page').classList.remove('open'); $('#chatFab').classList.remove('hidden'); if(CFG.key) $('#fab').classList.remove('hidden'); } }, {kind, arg}, replace);
   renderPage(kind, arg);
 }
 function renderPage(kind, arg){
-  const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden';
+  const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden'; $('#chatFab').classList.toggle('hidden', kind==='notes'); $('#fab').classList.toggle('hidden', kind==='notes');
   if(kind==='history') pageHistory(B,T,A);
   else if(kind==='charts') pageCharts(B,T,A);
   else if(kind==='photos') pagePhotos(B,T,A);
   else if(kind==='volume') pageVolume(B,T,A);
   else if(kind==='health') pageHealth(B,T,A);
+  else if(kind==='notes') pageNotes(B,T,A);
   else if(kind==='diet') pageDiet(B,T,A);
   else if(kind==='coach') pageCoach(B,T,A);
   else if(kind==='plans') pagePlans(B,T,A);
@@ -1436,10 +1519,10 @@ if(!state.session){ const w=[...state.workouts].filter(x=>x.date===todayISO()).s
 if(!CFG.key){
   $('#main').innerHTML = `<div style="padding:40px 4px"><div class="brand" style="font-size:44px;margin-bottom:6px"><b>IRON</b></div><div style="color:var(--muted);margin-bottom:22px">Private. Paste the access key the coach sent you. It stays on this phone.</div><div class="form"><input id="keyIn" placeholder="access key" autocomplete="off" autocapitalize="off"><button class="btn gold" id="keyGo">Open</button></div></div>`;
   $('#keyGo').onclick=()=>{ const k=$('#keyIn').value.trim(); if(!k) return; try{ localStorage.setItem('iron.key',k); }catch(e){} location.reload(); };
-  $('#fab').classList.add('hidden'); setStatus('off','locked');
+  $('#fab').classList.add('hidden'); $('#chatFab').classList.add('hidden'); setStatus('off','locked');
 } else {
-  render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline');
-  fullSync().then(()=>{ if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
+  render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline'); updateChatBadge();
+  fullSync().then(()=>{ updateChatBadge(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
 if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }

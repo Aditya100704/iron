@@ -931,7 +931,7 @@ function swapSheet(slot, day){
       ${others.length?`<label style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin:10px 0 6px">Any ${esc(slot.muscle)} exercise</label><select id="swapAny" style="width:100%"><option value="">— pick —</option>${others.map(o=>`<option>${esc(o)}</option>`).join('')}</select>`:''}
       <div class="empty" style="padding:10px 0 0;text-align:left">Tap an exercise to use it today. <b>Make default</b> changes the plan from now on.</div>`;
     $$('#modalBody [data-pick]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-def]')) return; setSwapToday(slot,el.dataset.pick); closeModal(); render(); });
-    $$('#modalBody [data-def]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const n=b.dataset.def; setDefault(slot,n); toast(n+' is now the default'); draw(); render(); });
+    $$('#modalBody [data-def]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const n=b.dataset.def; setDefault(slot,n); setSwapToday(slot,n); toast(n+' is now the default'); closeModal(); render(); });
     const any=$('#swapAny'); if(any) any.onchange=()=>{ if(any.value){ addAlt(slot, any.value); setSwapToday(slot,any.value); closeModal(); render(); } };
   };
   modal('Swap · '+slot.muscle, '', [{t:'New', keep:true, fn:()=>newExerciseModal(name=>{ addAlt(slot,name); setSwapToday(slot,name); render(); }, slot.muscle)},{t:'+ Add existing', keep:true, fn:()=>pickExercise({title:'Add a '+slot.muscle+' option', muscle:slot.muscle, onPick:name=>{ addAlt(slot,name); setSwapToday(slot,name); render(); }})},{t:'Close'}]);

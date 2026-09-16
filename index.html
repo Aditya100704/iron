@@ -47,7 +47,18 @@ header.top{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg)
 .status{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px;letter-spacing:.06em;text-transform:uppercase;font-family:var(--mono)}
 .status .dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .status.ok .dot{background:var(--green)} .status.off .dot{background:var(--red)} .status.busy .dot{background:var(--gold)}
-main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
+main{padding:0 var(--pad) calc(120px + var(--safe-b))}
+html,body{height:100%;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100dvh;min-height:100vh}
+header.top{flex:none}
+#pager{flex:1;min-height:0;overflow:hidden;position:relative}
+#pager .track{display:flex;width:200%;height:100%;transform:translateX(-50%);transition:transform .28s cubic-bezier(.2,.8,.2,1);will-change:transform}
+#pager .track.drag{transition:none}
+#pager .pane{width:50%;height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative;display:flex;flex-direction:column}
+.panehead{display:flex;align-items:center;justify-content:space-between;padding:6px var(--pad) 4px}
+.panehead h2{font-family:var(--display);font-size:30px;margin:0;letter-spacing:.02em}
+.panebody{padding:0 var(--pad) 0;flex:1;display:flex;flex-direction:column}
+.panebody .chatbar{position:sticky;bottom:0;margin:auto calc(-1 * var(--pad)) 0}
 
 .dayhead{padding:2px 0 8px}
 .daypick{position:relative;display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -152,9 +163,9 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 
 .fab{display:none!important;position:fixed;right:max(16px,calc(50% - 280px + 16px));bottom:calc(18px + var(--safe-b));z-index:30;width:56px;height:56px;border-radius:50%;background:var(--raised);border:1px solid var(--line2);color:var(--text);font-size:26px;display:grid;place-items:center;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .finish{position:fixed;left:max(16px,calc(50% - 280px + 16px));bottom:calc(18px + var(--safe-b));z-index:30;height:56px;padding:0 20px;border-radius:999px;background:var(--gold);color:var(--gold-ink);font-weight:600;font-size:15px;box-shadow:0 10px 30px rgba(0,0,0,.45);display:flex;align-items:center;gap:8px}
-.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:45;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:88;opacity:0;pointer-events:none;transition:opacity .2s}
 .scrim.on{opacity:1;pointer-events:auto}
-.sheet{position:fixed;left:0;top:0;bottom:0;z-index:50;width:min(82vw,330px);background:var(--surface);border-right:1px solid var(--line2);border-radius:0 18px 18px 0;padding:calc(14px + env(safe-area-inset-top)) 14px calc(16px + var(--safe-b));overflow-y:auto;transform:translateX(-105%);transition:transform .24s ease;max-height:88dvh;overflow:auto}
+.sheet{position:fixed;left:0;top:0;bottom:0;z-index:90;width:min(82vw,330px);background:var(--surface);border-right:1px solid var(--line2);border-radius:0 18px 18px 0;padding:calc(14px + env(safe-area-inset-top)) 14px calc(16px + var(--safe-b));overflow-y:auto;transform:translateX(-105%);transition:transform .24s ease;max-height:88dvh;overflow:auto}
 .sheet.open{transform:none}
 .sheet .grab{display:none}
 .sheet h3{font-family:var(--display);font-size:26px;margin:4px 0 10px;letter-spacing:.03em}
@@ -166,6 +177,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .menu button .ic{color:var(--gold);font-size:18px}
 
 .page{position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto;transform:translateX(100%);transition:transform .22s ease;padding-bottom:calc(30px + var(--safe-b))}
+.page.notes{transform:translateX(-100%)}
 .page.open{transform:none}
 .page .bar{position:sticky;top:0;background:var(--bg);z-index:2;display:flex;align-items:center;gap:8px;padding:calc(12px + var(--safe-t)) 10px 10px;border-bottom:1px solid var(--line)}
 .page .bar .back{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;font-size:22px;color:var(--muted)}
@@ -223,7 +235,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .chatfab .n{display:none!important;position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--gold);color:#111;font-family:var(--mono);font-size:11px;font-weight:700;display:grid;place-items:center}
 .chatfab.hidden{display:none}
 .confetti{position:fixed;inset:0;z-index:120;pointer-events:none}
-.chat{display:flex;flex-direction:column;gap:6px;padding:4px 0 96px}
+.chat{display:flex;flex-direction:column;gap:6px;padding:4px 0 12px}
 .chat .day{align-self:center;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;margin:10px 0 4px}
 .chat .bub{align-self:flex-end;max-width:86%;background:#1f2a1c;border:1px solid #2c3d28;border-radius:16px 16px 4px 16px;padding:9px 12px 7px;display:flex;gap:10px;align-items:flex-start;position:relative}
 .chat .bub.note{background:var(--surface);border-color:var(--line);border-radius:16px 16px 4px 16px}
@@ -239,7 +251,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .chat .pin::-webkit-scrollbar{display:none}
 .chat .pin .p{flex:none;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:6px 12px;font-size:13px;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
 .chat .pin .p b{color:var(--gold);font-family:var(--mono);font-size:11px;margin-right:6px}
-.chatbar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--bg);border-top:1px solid var(--line);padding:10px var(--pad) calc(10px + var(--safe-b));display:flex;gap:8px;align-items:flex-end}
+.chatbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg);border-top:1px solid var(--line);padding:10px var(--pad) calc(10px + var(--safe-b));display:flex;gap:8px;align-items:flex-end}
 .chatbar textarea{flex:1;min-height:44px;max-height:120px;height:44px;resize:none;padding:11px 14px;border-radius:22px;background:var(--surface);border:1px solid var(--line2);color:var(--text);font-size:15.5px;line-height:1.3}
 .chatbar .send{width:44px;height:44px;border-radius:50%;background:var(--gold);color:#111;border:0;font-size:20px;display:grid;place-items:center;flex:none}
 .chatbar .send:disabled{opacity:.35}
@@ -356,7 +368,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
     <div class="brand"><b>IRON</b> · SHANKAR</div>
     <div class="status" id="status"><span class="dot"></span><span id="statusTxt">loading</span></div>
   </header>
-  <main id="main"></main>
+  <div id="pager"><div class="track" id="ptrack"><section class="pane" id="paneNotes"><div class="panehead"><h2>Notes</h2><button class="act hidden" id="notesAct"></button></div><div class="panebody" id="notesBody"></div></section><section class="pane" id="paneWork"><main id="main"></main></section></div></div>
 </div>
 
 <button class="fab" id="fab" aria-label="Menu">⋯</button>
@@ -774,9 +786,9 @@ function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
 function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div><div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
 function bindBubble(el, B,T,A){ const b=el.querySelector('[data-tick]'); if(b) b.onclick=()=>toggleTask(b.dataset.tick, B,T,A); el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); }; }
-function notesStat(){ const items=tasksList(); const D=todayISO(); const el=$('#pageBody .chatstat'); if(el) el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span>`; }
+function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el) el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span>`; }
 function pageNotes(B,T,A){
-  T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  if(T) T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
   const D=todayISO(); const doneToday=items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
   A.textContent=showOpen?'All':'Open only'; A.className='act'; A.onclick=()=>{ state.settings.notesOpenOnly=!showOpen; persist(); pageNotes(B,T,A); };
   const shown=showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items;
@@ -795,7 +807,7 @@ function pageNotes(B,T,A){
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } };
   const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; tasksList().push(t); tasksSave(); ta.value=''; grow();
     const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
-    const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=$('#page'); P.scrollTop=P.scrollHeight; ta.focus(); };
+    const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
   sb.onclick=send;
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
@@ -813,10 +825,10 @@ function pageNotes(B,T,A){
         SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ commit(); if(listening && !restarting){ restarting=true; setTimeout(()=>{ restarting=false; if(listening) startRec(); }, 250); } } });
         await startRec(); }catch(e){ setL(false); toast('Voice failed: '+(e.message||e)); } };
   }
-  $$('#pageBody [data-tick]').forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
-  $$('#pageBody [data-tid]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
-  $$('#pageBody [data-jump]').forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
-  const P=$('#page'); P.scrollTop=P.scrollHeight;
+  [...B.querySelectorAll('[data-tick]')].forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
+  [...B.querySelectorAll('[data-tid]')].forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
+  [...B.querySelectorAll('[data-jump]')].forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
+  const P=B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight;
 }
 function toggleTask(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
@@ -1205,24 +1217,42 @@ document.addEventListener('keydown', e=>{ const G=$('#gal'); if(!G.classList.con
 const hideSheet=()=>{ $('#scrim').classList.remove('on'); $('#sheet').classList.remove('open'); };
 $('#fab').onclick=()=>openDrawer();
 $('#scrim').onclick=()=>closeLayer('sheet');
-$$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
+$$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ if(b.dataset.page==='notes'){ closeLayer('sheet'); goPane(0); return; } hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
 $('#pageBack').onclick=()=>closeLayer('page');
+const PAGER={idx:1, notesRendered:false};
+function renderNotesPane(){ const B=$('#notesBody'), A=$('#notesAct'); pageNotes(B, null, A); PAGER.notesRendered=true; }
+function goPane(i, animate){ PAGER.idx=i; const t=$('#ptrack'); t.classList.toggle('drag', animate===false); t.style.transform=`translateX(${i===0?0:-50}%)`; if(animate===false) requestAnimationFrame(()=>t.classList.remove('drag')); LS.set('pane', i===0?'notes':'workout'); $('#chatFab').classList.toggle('hidden', i===0); if(i===0) renderNotesPane(); }
+(function(){ let sx=null, sy=null, mode=null, t0=0, lastX=0, lastT=0, W=()=>innerWidth, sheetW=()=>$('#sheet').offsetWidth||300;
+  const track=()=>$('#ptrack'), sheet=()=>$('#sheet'), scrim=()=>$('#scrim');
+  const busy=()=>$('#page').classList.contains('open') || $('#pad').classList.contains('open') || $('#modal').classList.contains('on') || $('#gal').classList.contains('on');
+  document.addEventListener('touchstart', e=>{ mode=null; if(!CFG.key || e.touches.length!==1 || busy()) return; if(e.target.closest('.datestrip, .last, .segs, .chips, .meters, .pin, select, input, textarea, .chatbar')) return; const t=e.touches[0]; sx=t.clientX; sy=t.clientY; t0=Date.now(); lastX=sx; lastT=t0; mode='pending'; }, {passive:true});
+  document.addEventListener('touchmove', e=>{ if(!mode || mode==='off') return; const t=e.touches[0]; const dx=t.clientX-sx, dy=t.clientY-sy; lastX=t.clientX; lastT=Date.now();
+    if(mode==='pending'){ if(Math.abs(dy)>10 && Math.abs(dy)>Math.abs(dx)){ mode='off'; return; } if(Math.abs(dx)<12) return; mode = sheet().classList.contains('open') ? 'drawer' : 'pane'; track().classList.add('drag'); sheet().style.transition='none'; scrim().style.transition='none'; }
+    if(mode==='pane'){ const base = PAGER.idx===0 ? 0 : -W();
+      if(PAGER.idx===0 && dx>0){ const sw=sheetW(); const o=Math.min(sw, dx); sheet().style.transform=`translateX(${-sw+o}px)`; scrim().style.opacity=(o/sw*1); scrim().style.pointerEvents='none'; scrim().classList.add('on'); }
+      else if(PAGER.idx===1 && dx<0){ track().style.transform=`translateX(${base+dx*0.22}px)`; }
+      else { track().style.transform=`translateX(${base+dx}px)`; } }
+    if(mode==='drawer'){ const sw=sheetW(); const o=Math.max(-sw, Math.min(0, dx)); sheet().style.transform=`translateX(${o}px)`; scrim().style.opacity=1+o/sw; }
+  }, {passive:true});
+  document.addEventListener('touchend', e=>{ if(mode!=='pane' && mode!=='drawer'){ mode=null; return; } const dx=lastX-sx; const vel=(lastX-sx)/Math.max(1,(lastT-t0)); const W0=W(); const sw=sheetW();
+    track().classList.remove('drag'); sheet().style.transition=''; scrim().style.transition=''; scrim().style.pointerEvents='';
+    if(mode==='pane'){
+      if(PAGER.idx===1){ if(dx>W0/4 || vel>0.45) goPane(0); else goPane(1); }
+      else { if(dx<-W0/4 || vel<-0.45){ sheet().style.transform=''; scrim().style.opacity=''; scrim().classList.remove('on'); goPane(1); }
+             else if(dx>sw/3 || vel>0.45){ sheet().style.transform=''; scrim().style.opacity=''; scrim().classList.remove('on'); openDrawer(); goPane(0); }
+             else { sheet().style.transform=''; scrim().style.opacity=''; scrim().classList.remove('on'); goPane(0); } } }
+    if(mode==='drawer'){ sheet().style.transform=''; scrim().style.opacity=''; if(dx<-sw/3 || vel<-0.45) closeLayer('sheet'); }
+    mode=null; }, {passive:true});
+})();
 const openDrawer=()=>{ if($('#sheet').classList.contains('open')) return; $('#scrim').classList.add('on'); $('#sheet').classList.add('open'); pushLayer('sheet', hideSheet); };
 document.querySelector('header .brand, .brand') && (document.querySelector('header .brand, .brand').onclick=()=>{ if(CFG.key) openDrawer(); });
-// swipes on the home screen: Android's own back gesture owns the screen edges, so the app listens to the whole screen instead —
-// a clear sideways pull (not started on a strip that scrolls sideways) opens the drawer (→) or Notes (←).
-(function(){ let sx=null, sy=null, active=false, fired=false;
-  const homeOnly=()=>!$('#page').classList.contains('open') && !$('#pad').classList.contains('open') && !$('#modal').classList.contains('on') && !$('#gal').classList.contains('on') && !$('#sheet').classList.contains('open');
-  document.addEventListener('touchstart', e=>{ active=false; fired=false; if(!CFG.key || e.touches.length!==1 || !homeOnly()) return; if(e.target.closest('.datestrip, .last, .segs, .chips, .meters, .pin, select, input, textarea')) return; const t=e.touches[0]; sx=t.clientX; sy=t.clientY; active=true; }, {passive:true});
-  document.addEventListener('touchmove', e=>{ if(!active || fired) return; const t=e.touches[0]; const dx=t.clientX-sx, dy=t.clientY-sy; if(Math.abs(dy)>40 && Math.abs(dy)>Math.abs(dx)){ active=false; return; } if(dx>70 && Math.abs(dy)<45){ fired=true; active=false; openDrawer(); } else if(dx<-70 && Math.abs(dy)<45){ fired=true; active=false; openPage('notes'); } }, {passive:true});
-  document.addEventListener('touchend', ()=>{ active=false; }, {passive:true}); })();
-$('#chatFab').onclick=()=>{ if($('#page').classList.contains('open') && $('#pageTitle').textContent==='Notes') return; openPage('notes'); };
+$('#chatFab').onclick=()=>goPane(0);
 function openPage(kind, arg, replace){
-  pushLayer('page', ()=>{ const below=[...LAYERS].reverse().find(l=>l.kind==='page'); if(below) renderPage(below.data.kind, below.data.arg); else { $('#page').classList.remove('open'); $('#chatFab').classList.remove('hidden'); if(CFG.key) $('#fab').classList.remove('hidden'); } }, {kind, arg}, replace);
+  pushLayer('page', ()=>{ const below=[...LAYERS].reverse().find(l=>l.kind==='page'); if(below) renderPage(below.data.kind, below.data.arg); else { $('#page').classList.remove('open'); $('#chatFab').classList.toggle('hidden', PAGER.idx===0); } }, {kind, arg}, replace);
   renderPage(kind, arg);
 }
 function renderPage(kind, arg){
-  const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden'; $('#chatFab').classList.toggle('hidden', kind==='notes'); $('#fab').classList.toggle('hidden', kind==='notes');
+  const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden'; $('#chatFab').classList.add('hidden');
   if(kind==='history') pageHistory(B,T,A);
   else if(kind==='charts') pageCharts(B,T,A);
   else if(kind==='photos') pagePhotos(B,T,A);
@@ -1556,8 +1586,8 @@ if(!CFG.key){
   $('#keyGo').onclick=()=>{ const k=$('#keyIn').value.trim(); if(!k) return; try{ localStorage.setItem('iron.key',k); }catch(e){} location.reload(); };
   $('#fab').classList.add('hidden'); $('#chatFab').classList.add('hidden'); setStatus('off','locked');
 } else {
-  render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline'); updateChatBadge();
-  fullSync().then(()=>{ updateChatBadge(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
+  render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline'); updateChatBadge(); goPane(LS.get('pane','notes')==='workout'?1:0, false);
+  fullSync().then(()=>{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
 if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }

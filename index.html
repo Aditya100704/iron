@@ -771,7 +771,7 @@ function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
 function pageNotes(B,T,A){
   T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
-  const D=todayISO(); const doneToday=items.filter(t=>t.done_at && t.done_at.slice(0,10)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
+  const D=todayISO(); const doneToday=items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
   A.textContent=showOpen?'All':'Open only'; A.className='act'; A.onclick=()=>{ state.settings.notesOpenOnly=!showOpen; persist(); pageNotes(B,T,A); };
   const shown=showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items;
   const older=open.filter(t=>t.created_at.slice(0,10)<D);
@@ -792,16 +792,16 @@ function pageNotes(B,T,A){
   sb.onclick=send;
   $$('#pageBody [data-tick]').forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   $$('#pageBody [data-tid]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
-  $$('#pageBody [data-jump]').forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
+  $$('#pageBody [data-jump]').forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
   const P=$('#page'); P.scrollTop=P.scrollHeight;
 }
 function toggleTask(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
   if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); pageNotes(B,T,A); return; }
-  t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && x.done_at.slice(0,10)===D).length;
+  t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && isoLocal(x.done_at)===D).length;
   t.shine = COMBO[n] ? {text:COMBO[n], big:true} : {text:shineLine(), big:false};
   tasksSave(); pageNotes(B,T,A); confetti(); buzz('double'); play(COMBO[n]?'fanfare':'coin');
-  const el=$('#t-'+id); if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+  const el=$('#t-'+id); if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function taskMenu(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;

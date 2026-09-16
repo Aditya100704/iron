@@ -87,8 +87,11 @@ header.top{flex:none}
 .exhead .m{flex:1;min-width:0}
 .exhead .muscle{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;gap:8px;align-items:center}
 .exhead .muscle .ss{color:var(--blue)} .exhead .muscle .opt{color:var(--dim)} .exhead .muscle .added{color:var(--green)}
-.exname{font-weight:600;font-size:17px;margin-top:2px;display:flex;align-items:center;gap:8px;line-height:1.2}
-.exname .swap{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--muted);background:var(--raised)}
+.exname{font-weight:600;font-size:17px;margin-top:2px;line-height:1.12;cursor:pointer}
+.exname span{display:block;font-family:var(--display);letter-spacing:.01em;text-wrap:balance}
+.exhead .m{flex:1;min-width:0}
+.exhead .tools{display:flex;flex-direction:column;gap:2px;flex:none;margin-left:6px}
+.exhead .tools .iconbtn{width:36px;height:34px;background:var(--raised);border-radius:9px}
 .iconbtn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--muted);background:transparent;flex:none}
 .iconbtn:active{background:var(--raised)}
 .iconbtn.has{color:var(--gold)}
@@ -975,10 +978,9 @@ function render(){
       <div class="exhead">
         <div class="m">
           <div class="muscle">${esc(slot.muscle)}${slot.superset?`<span class="ss">superset</span>`:''}${slot.optional?`<span class="opt">optional</span>`:''}${slot.extra?`<span class="added">added</span>`:''}${slot.logged?`<span class="added">logged · not in plan</span>`:''}</div>
-          <div class="exname"><span>${esc(name)}</span>${slot.logged?'':`<button class="swap" data-swap="${esc(slot.key)}" title="Swap, set default or add">⇄</button>`}</div>
+          <div class="exname" ${slot.logged?'':`data-swap="${esc(slot.key)}"`}><span>${esc(name)}</span></div>
         </div>
-        <button class="iconbtn ${note?'has':''}" data-note="${esc(name)}" title="Note">✎</button>
-        <button class="iconbtn" data-exhist="${esc(name)}" title="History">▤</button>
+        <div class="tools">${slot.logged?'':`<button class="iconbtn swap" data-swap="${esc(slot.key)}" title="Swap, set default or add">⇄</button>`}<button class="iconbtn" data-exhist="${esc(name)}" title="History">▤</button></div>
       </div>
       ${slot.logged?'':`<div class="prescribe"><button class="plan" data-sets="${esc(slot.key)}" title="Adjust planned sets"><b>${planned}</b> × ${esc(slot.reps||'8-12')}</button>${volAdj(slot.key)?`<span class="over">${volAdj(slot.key)>0?'+':''}${volAdj(slot.key)} auto</span>`:''}${slot.recCut?'<span class="over" style="color:var(--red)">−1 · not recovered</span>':''}${over?`<span class="over">+${over} over plan</span>`:''}${prevOver&&!mine.length?`<button class="suggest" data-trim="${esc(slot.key)}">−${prevOver} set suggested</button>`:''}${plat?`<button class="plat" data-plat="${esc(slot.key)}">plateau · 3 sessions flat</button>`:''}${slot.note?`<span class="note">${esc(slot.note)}</span>`:''}</div>`}
       <div class="last">${best.set?`<span class="chip best">best ${fmtW(best.set.weight)}×${best.set.reps} · e1RM ${best.e1}</span>`:'<span class="chip">no history</span>'}${last.map(l=>`<span class="chip" title="${l.date}">${l.date.slice(5)}: ${l.sets.map(s=>fmtW(s.weight)+'×'+s.reps).join(' · ')}</span>`).join('')}</div>
@@ -993,13 +995,12 @@ function render(){
   html += `<button class="addex" id="addEx"><span class="plus">+</span> Add an exercise ${today?'to today':'to '+short}</button>`;
   html += `<div class="empty" style="padding-top:0">${esc(plan.name)} · ${state.lastSync?('synced '+new Date(state.lastSync).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})):'not synced yet'}</div>`;
   $('#main').innerHTML = html;
-  fitName(); centerStrip();
+  fitName(); centerStrip(); fitExNames();
   const bySlot = key => slots.find(s=>s.key===key);
   $('#daySel').onchange = e => { if(e.target.value==='__rest'){ state.settings.restDays[D]=true; persist(); state.viewDay='__rest'; render(); return; } state.viewDay=e.target.value; render(); };
   $$('#dateStrip [data-date]').forEach(b=>b.onclick=()=>goDate(b.dataset.date));
   $$('[data-add]').forEach(b=>b.onclick=()=>openPad(day, bySlot(b.dataset.add)));
   $$('[data-swap]').forEach(b=>b.onclick=()=>swapSheet(bySlot(b.dataset.swap), day));
-  $$('[data-note]').forEach(b=>b.onclick=()=>noteModal(b.dataset.note, day));
   $$('[data-exhist]').forEach(b=>b.onclick=()=>openPage('exhist', b.dataset.exhist));
   $$('[data-setid]').forEach(el=>el.onclick=()=>setDetail(el.dataset.setid));
   $$('[data-unit]').forEach(b=>b.onclick=()=>{ const n=b.dataset.unit; state.settings.units[n]=exUnit(n)==='kg'?'lb':'kg'; persist(); render(); });
@@ -1046,9 +1047,10 @@ function renderRest(D, today, days){
   const dn=$('#deloadNo'); if(dn) dn.onclick=()=>{ state.settings.deloadNo[weekStartISO()]=true; persist(); render(); };
   clearInterval(clockT);
 }
+function fitExNames(){ const probe=document.createElement('span'); probe.style.cssText='position:absolute;visibility:hidden;white-space:nowrap;font-family:var(--display);font-weight:600;letter-spacing:.01em;font-size:100px'; document.body.appendChild(probe); $$('.exname span').forEach(sp=>{ const w=sp.parentElement.clientWidth; if(!w) return; probe.textContent=sp.textContent; const tw=probe.getBoundingClientRect().width/100; let fs=Math.floor((w*0.92)/tw); if(fs>=19){ sp.style.fontSize=Math.min(34,fs)+'px'; sp.style.whiteSpace='nowrap'; } else { sp.style.whiteSpace='normal'; const fs2=Math.floor((w*0.92*2)/tw); sp.style.fontSize=Math.max(17,Math.min(30,fs2))+'px'; } }); probe.remove(); }
 function fitName(){ const el=$('#dayName'); if(!el) return; let s=46; el.style.fontSize=s+'px'; while(el.scrollWidth>el.clientWidth+1 && s>18){ s-=1; el.style.fontSize=s+'px'; } }
 function centerStrip(id){ const st=$(id||'#dateStrip'); const sel=st&&st.querySelector('.sel'); if(sel) st.scrollLeft = sel.offsetLeft - st.clientWidth/2 + sel.offsetWidth/2; }
-window.addEventListener('resize', ()=>fitName());
+window.addEventListener('resize', ()=>{ fitName(); fitExNames(); });
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>fitName());
 function dateStrip(D, doneDates){
   // From a week before today to a week after: just M T W T F S S. Outside that window: the date.

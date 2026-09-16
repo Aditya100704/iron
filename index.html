@@ -52,9 +52,9 @@ html,body{height:100%;overflow:hidden}
 #app{display:flex;flex-direction:column;height:100dvh;min-height:100vh}
 header.top{flex:none}
 #pager{flex:1;min-height:0;overflow:hidden;position:relative}
-#pager .track{display:flex;width:200%;height:100%;transform:translateX(-50%);transition:transform .28s cubic-bezier(.2,.8,.2,1);will-change:transform}
+#pager .track{display:flex;width:300%;height:100%;transform:translateX(-33.3333%);transition:transform .28s cubic-bezier(.2,.8,.2,1);will-change:transform}
 #pager .track.drag{transition:none}
-#pager .pane{width:50%;height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative;display:flex;flex-direction:column}
+#pager .pane{width:33.3333%;height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative;display:flex;flex-direction:column}
 .panehead{display:flex;align-items:center;justify-content:space-between;padding:6px var(--pad) 4px}
 .panehead h2{font-family:var(--display);font-size:30px;margin:0;letter-spacing:.02em}
 .panebody{padding:0 var(--pad) 0;flex:1;display:flex;flex-direction:column}
@@ -260,6 +260,29 @@ header.top{flex:none}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(214,101,90,.5)}50%{box-shadow:0 0 0 10px rgba(214,101,90,0)}}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
 .chatstat b{color:var(--gold)}
+.chatstat .jlink{margin-left:auto;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--text);font-family:var(--mono);font-size:12px;min-height:0}
+.vcount{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 12px}
+.vcount .c{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
+.vcount .n{font-family:var(--display);font-size:30px;color:var(--gold);line-height:1;font-variant-numeric:tabular-nums}
+.vcount .k{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.vblock{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+.vblock .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.vblock.belief{background:#17150E;border-color:#4a3d13}
+.vblock.belief .l{font-family:var(--display);font-size:22px;line-height:1.15;color:var(--gold);margin:0 0 8px;letter-spacing:.01em}
+.vblock.knot .l{font-size:15px;line-height:1.45;color:var(--text)}
+.vblock .vp{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-top:1px solid var(--line)}
+.vblock .vp:first-of-type{border-top:0;padding-top:0}
+.vblock .vp b{font-family:var(--display);font-size:18px;letter-spacing:.01em}
+.vblock .vp span{font-size:14.5px;line-height:1.4;color:var(--text)}
+.vblock .vp.mine span{color:var(--gold)}
+.vblock .s{font-size:13px;color:var(--muted);line-height:1.4;margin-top:8px}
+.vpair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vpair div{position:relative;aspect-ratio:3/4;background:#000;border-radius:10px;overflow:hidden}
+.vpair img{width:100%;height:100%;object-fit:cover;display:block}
+.vpair span{position:absolute;left:8px;bottom:6px;font-family:var(--mono);font-size:11px;color:#fff;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:6px}
+.jentry{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.jentry .d{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.jentry .tx{white-space:pre-wrap;line-height:1.45}
 .gal{position:fixed;inset:0;background:#000;z-index:95;display:none;flex-direction:column}
 .gal.on{display:flex}
 .gal .track{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -368,7 +391,7 @@ header.top{flex:none}
     <div class="brand"><b>IRON</b> · SHANKAR</div>
     <div class="status" id="status"><span class="dot"></span><span id="statusTxt">loading</span></div>
   </header>
-  <div id="pager"><div class="track" id="ptrack"><section class="pane" id="paneNotes"><div class="panehead"><h2>Notes</h2><button class="act hidden" id="notesAct"></button></div><div class="panebody" id="notesBody"></div></section><section class="pane" id="paneWork"><main id="main"></main></section></div></div>
+  <div id="pager"><div class="track" id="ptrack"><section class="pane" id="paneNotes"><div class="panehead"><h2>Notes</h2><button class="act hidden" id="notesAct"></button></div><div class="panebody" id="notesBody"></div></section><section class="pane" id="paneWork"><main id="main"></main></section><section class="pane" id="paneVision"><div class="panehead"><h2>Vision</h2><button class="act" id="visionAct">+ Line</button></div><div class="panebody" id="visionBody"></div></section></div></div>
 </div>
 
 <button class="fab" id="fab" aria-label="Menu">⋯</button>
@@ -391,10 +414,13 @@ header.top{flex:none}
   <div class="grab"></div>
   <h3>Everything else</h3>
   <div class="menu">
+    <button data-page="workout"><span class="ic">▶</span><span class="t">Workout</span><span class="s">Today's session</span></button>
     <button data-page="history"><span class="ic">▤</span><span class="t">History</span><span class="s">Every session, every set</span></button>
     <button data-page="charts"><span class="ic">▲</span><span class="t">Progress</span><span class="s">Volume, e1RM, PRs</span></button>
     <button data-page="diet"><span class="ic">◐</span><span class="t">Diet</span><span class="s">Tap your usuals, weigh-in</span></button>
     <button data-page="notes"><span class="ic">✎</span><span class="t">Notes</span><span class="s">Message yourself, tick it off, get the shine</span></button>
+    <button data-page="vision"><span class="ic">◈</span><span class="t">Vision</span><span class="s">The pull, not the push</span></button>
+    <button data-page="journal"><span class="ic">✍</span><span class="t">Journal</span><span class="s">Thoughts, filed for the coach</span></button>
     <button data-page="health"><span class="ic">♥</span><span class="t">Health</span><span class="s">Sleep, heart, swims from the band</span></button>
     <button data-page="volume"><span class="ic">◫</span><span class="t">Volume</span><span class="s">Specialization, recovery, auto sets</span></button>
     <button data-page="coach"><span class="ic">✦</span><span class="t">Coach</span><span class="s">Weekly notes from the coach</span></button>
@@ -470,7 +496,7 @@ async function fullSync(){
       api.get("workouts?select=id,date,plan_id,day_key,day_name,note,started_at,finished_at&order=date.desc&limit=500"),
       api.get("recovery?select=id,date,workout_id,muscle,status,created_at&order=date.desc&limit=1000"),
       api.get("coach_notes?select=id,created_at,week_start,title,body,read_at&order=created_at.desc&limit=30"),
-      api.get("settings?select=key,value&key=in.(volume,tasks)"),
+      api.get("settings?select=key,value&key=in.(volume,tasks,vision)"),
       api.get("food_items?select=name,slot,kcal,protein,uses,last_used,archived&order=uses.desc"),
       api.get("meals?select=id,date,slot,item,kcal,protein,qty,note,created_at&order=date.desc,created_at.asc&limit=1500"),
       api.get("body_metrics?select=date,weight,waist_above,waist_at,note&order=date.desc&limit=400"),
@@ -478,6 +504,7 @@ async function fullSync(){
     state.exercises = ex; state.workouts = wo; state.notes = notes;
     const pendingRec=new Set(state.queue.filter(op=>op.t==='rec.insert').map(op=>op.row.id)); state.recovery = rec.concat((state.recovery||[]).filter(r=>pendingRec.has(r.id) && !rec.some(x=>x.id===r.id)));
     const volRow=vol.find(r=>r.key==='volume'); if(volRow && volRow.value) state.volume = volRow.value;
+    const vRow=vol.find(r=>r.key==='vision'); if(vRow && vRow.value){ const loc=visionData(); if((vRow.value.updated||0)>=(loc.updated||0)){ state.vision=vRow.value; LS.set('vision',state.vision); } }
     const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; const local=state.tasks||{items:[]}; const lt=local.updated||0, rt=remote.updated||0; if(rt>=lt) state.tasks=remote; else enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); LS.set('tasks', state.tasks); }
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
@@ -722,6 +749,7 @@ function deloadCard(){ if(!deloadSuggested()) return ''; return `<div class="vol
 /* ================= HEALTH CONNECT (native app only) ================= */
 state.health = LS.get('health', {daily:{}, sessions:{}, lastSync:0, granted:false});
 state.tasks = LS.get('tasks', {items:[], updated:0, lineIdx:0});
+state.vision = LS.get('vision', {lines:[], updated:0});
 const isNative = () => !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
 const HC = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.HealthConnect) || null;
 const HC_TYPES=['Steps','Distance','ActiveCaloriesBurned','TotalCaloriesBurned','ExerciseSession','SleepSession','HeartRateSeries','RestingHeartRate','HeartRateVariabilityRmssd','OxygenSaturation','Vo2Max','Weight'];
@@ -787,14 +815,14 @@ function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
 function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div><div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
 function bindBubble(el, B,T,A){ const b=el.querySelector('[data-tick]'); if(b) b.onclick=()=>toggleTask(b.dataset.tick, B,T,A); el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); }; }
-function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el) el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span>`; }
+function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); } }
 function pageNotes(B,T,A){
   if(T) T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
   const D=todayISO(); const doneToday=items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
   A.textContent=showOpen?'All':'Open only'; A.className='act'; A.onclick=()=>{ state.settings.notesOpenOnly=!showOpen; persist(); pageNotes(B,T,A); };
-  const shown=showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items;
+  const shown=(showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items).filter(t=>t.kind!=='journal'); const jn=items.filter(t=>t.kind==='journal').length;
   const older=open.filter(t=>t.created_at.slice(0,10)<D);
-  let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span></div>`;
+  let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="jLink">journal <b>${jn}</b> ›</button></div>`;
   if(older.length && !showOpen) html+=`<div class="chat"><div class="pin">${older.map(t=>`<button class="p" data-jump="${t.id}"><b>${new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</b>${esc(t.text)}</button>`).join('')}</div></div>`;
   html+='<div class="chat" id="chat">';
   let lastDay=''; shown.forEach(t=>{ const d=t.created_at.slice(0,10); if(d!==lastDay){ lastDay=d; html+=`<div class="day" data-d="${d}">${d===D?'Today':new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>`; }
@@ -806,10 +834,10 @@ function pageNotes(B,T,A){
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } };
-  const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; tasksList().push(t); tasksSave(); ta.value=''; grow();
+  const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal:)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal:)\s*/i,''); } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
     const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
     const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
-  sb.onclick=send;
+  sb.onclick=send; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal');
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
@@ -845,7 +873,46 @@ function toggleTask(id, B,T,A){
 function taskMenu(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
   modal(t.kind==='task'?'Task':'Note', `<div class="form"><label>Text<textarea id="tkTx">${esc(t.text)}</textarea></label></div>`,
-    [{t:'Delete',red:true,fn:()=>{ state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); pageNotes(B,T,A); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); pageNotes(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v){ t.text=v; tasksSave(); } pageNotes(B,T,A); }}]);
+    [{t:'Delete',red:true,fn:()=>{ state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); pageNotes(B,T,A); }},{t:'Journal',fn:()=>{ t.kind='journal'; t.done_at=null; t.shine=null; t.journaled_at=new Date().toISOString(); tasksSave(); const el=$('#t-'+id); if(el){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); el.remove(); } notesStat(); toast('Filed to the journal. The coach reads it.', true); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); pageNotes(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v){ t.text=v; tasksSave(); } pageNotes(B,T,A); }}]);
+}
+function pageJournal(B,T,A){
+  T.textContent='Journal'; A.textContent='+ Entry'; A.className='act'; A.onclick=()=>{ modal('Journal entry', `<div class="form"><label>What is on your mind<textarea id="jTx" style="min-height:140px" placeholder="Raw. No audience."></textarea></label></div>`, [{t:'Cancel'},{t:'Save',gold:true,fn:()=>{ const v=$('#jTx').value.trim(); if(!v) return; const now=new Date().toISOString(); tasksList().push({id:uid(), text:v, kind:'journal', created_at:now, journaled_at:now, done_at:null}); tasksSave(); pageJournal(B,T,A); }}]); setTimeout(()=>$('#jTx').focus(),100); };
+  const es=tasksList().filter(t=>t.kind==='journal').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  B.innerHTML=`<div class="empty" style="text-align:left;padding:0 0 12px">Thoughts, not tasks. Every entry syncs to the database; the coach reads them when we talk and archives them in the repo journal. Tap one to edit or send it back to Notes.</div>`+(es.map(t=>`<div class="jentry" data-j="${t.id}"><div class="d">${new Date(t.created_at).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div><div class="tx">${esc(t.text)}</div></div>`).join('')||'<div class="empty">Nothing here yet. Type "j: …" in Notes, or tap any note and choose Journal.</div>');
+  $$('#pageBody [data-j]').forEach(el=>el.onclick=()=>{ const t=tasksList().find(x=>x.id===el.dataset.j); if(!t) return; modal('Journal entry', `<div class="form"><label>Entry<textarea id="jTx" style="min-height:140px">${esc(t.text)}</textarea></label></div>`, [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this entry?')) return; state.tasks.items=tasksList().filter(x=>x.id!==t.id); tasksSave(); pageJournal(B,T,A); }},{t:'Back to Notes',fn:()=>{ t.kind='note'; delete t.journaled_at; tasksSave(); pageJournal(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#jTx').value.trim(); if(v){ t.text=v; tasksSave(); } pageJournal(B,T,A); }}]); });
+}
+/* ---- vision board: the pull, not the push ---- */
+const VISION_SEED={
+  belief:['I am the fucking best. I can make everything work.','I can get ripped — and I will be.','I can make money — trading and the business both paying by the end of 2026.','I can get whatever I want. There is nothing that can stop me.'],
+  picture:[
+    ['The body','Best shape of my life. Ripped, ~66-69 kg of muscle with the fat stripped off. I catch the mirror and it is not "almost" any more.'],
+    ['The presence','I walk into a room and it turns. Grounded, sharp, easy. The kid who doubted himself is gone.'],
+    ['The eyes','My vision is strong and holding. The treatment was real and it worked. I travel with my eyes wide open.'],
+    ['The money','RenterFinder works: real users, real revenue. Trading puts money in, not out. Free to move how I want.'],
+    ['Front-foot living','Giving, not just taking. Time with kids who need someone in their corner. Present with family and friends, not half-there.']
+  ],
+  knot:'It does not matter whether any of this "ultimately" matters. Work and become successful and do good, or sit still and wonder. You do not think your way to meaning. You act your way there.'
+};
+function visionData(){ state.vision=state.vision||LS.get('vision',{lines:[],updated:0}); return state.vision; }
+function visionSave(){ visionData().updated=Date.now(); LS.set('vision',state.vision); enqueue({t:'setting.upsert', row:{key:'vision', value:state.vision}}); }
+const daysTo=(iso)=>Math.ceil((new Date(iso+'T00:00')-new Date())/86400000);
+async function renderVisionPane(){
+  const B=$('#visionBody'); const V=visionData(); const wk=weekStartISO();
+  const prsWk=state.sets.filter(x=>x.is_pr && x.date>=wk).length; const doneWk=tasksList().filter(t=>t.done_at && isoLocal(t.done_at)>=wk).length;
+  const bm=[...state.body].sort((a,b)=>b.date.localeCompare(a.date)); const wts=bm.filter(b=>b.weight!=null).slice(0,7); const avg=wts.length?(wts.reduce((a,b)=>a+ +b.weight,0)/wts.length).toFixed(1):'—';
+  const ph=(state.photosMeta||[]).slice().sort((a,b)=>a.taken_at.localeCompare(b.taken_at)); const first=ph[0], last=ph[ph.length-1];
+  B.innerHTML=`
+  <div class="vcount"><div class="c"><div class="n">${daysTo('2027-07-10')}</div><div class="k">days of runway</div></div><div class="c"><div class="n">${daysTo('2026-12-31')}</div><div class="k">days to money</div></div><div class="c"><div class="n">${prsWk}</div><div class="k">PRs this week</div></div><div class="c"><div class="n">${doneWk}</div><div class="k">tasks done this week</div></div></div>
+  <div class="vblock belief"><div class="k">The core belief</div>${VISION_SEED.belief.map(l=>`<div class="l">${esc(l)}</div>`).join('')}</div>
+  ${first&&last&&first.id!==last.id?`<div class="vblock"><div class="k">Where it started · where it is</div><div class="vpair"><div data-vp="${first.id}"><img data-vsrc="${first.id}" alt=""><span>${new Date(first.taken_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}</span></div><div data-vp="${last.id}"><img data-vsrc="${last.id}" alt=""><span>${new Date(last.taken_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}</span></div></div><div class="s">Cut: 67.2 → 61.1 kg, −6.1 in 66 days. Now: 7-day scale ${avg} kg, refilling. The last row gets built, not dieted.</div></div>`:''}
+  <div class="vblock"><div class="k">The picture · end of 2026</div>${VISION_SEED.picture.map(([h,t])=>`<div class="vp"><b>${esc(h)}</b><span>${esc(t)}</span></div>`).join('')}</div>
+  <div class="vblock knot"><div class="k">When the "does it matter" thought shows up</div><div class="l">${esc(VISION_SEED.knot)}</div></div>
+  <div class="vblock"><div class="k">Your lines</div>${(V.lines||[]).map(l=>`<div class="vp mine" data-vl="${l.id}"><span>${esc(l.text)}</span></div>`).join('')||'<div class="s">Tap + Line and write the next piece of the picture, in the present tense, as if it is already true.</div>'}</div>
+  <div class="s" style="padding:6px 0 24px">Read this on the days the push is not enough. Then go do the next rep. That is what the rep is for.</div>`;
+  $('#visionAct').onclick=()=>{ modal('A line for the board', `<div class="form"><label>Present tense, already true<textarea id="vlTx" style="min-height:110px" placeholder="e.g. I train at 6 am because that is who I am."></textarea></label></div>`, [{t:'Cancel'},{t:'Add',gold:true,fn:()=>{ const v=$('#vlTx').value.trim(); if(!v) return; visionData().lines=(visionData().lines||[]).concat([{id:uid(), text:v, at:new Date().toISOString()}]); visionSave(); renderVisionPane(); }}]); setTimeout(()=>$('#vlTx').focus(),100); };
+  $$('#visionBody [data-vl]').forEach(el=>el.onclick=()=>{ const l=visionData().lines.find(x=>x.id===el.dataset.vl); if(!l) return; modal('Your line', `<div class="form"><label>Line<textarea id="vlTx" style="min-height:110px">${esc(l.text)}</textarea></label></div>`, [{t:'Delete',red:true,fn:()=>{ visionData().lines=visionData().lines.filter(x=>x.id!==l.id); visionSave(); renderVisionPane(); }},{t:'Save',gold:true,fn:()=>{ const v=$('#vlTx').value.trim(); if(v){ l.text=v; visionSave(); } renderVisionPane(); }}]); });
+  $$('#visionBody [data-vp]').forEach(el=>el.onclick=()=>photoDetail(el.dataset.vp));
+  for(const img of $$('#visionBody img[data-vsrc]')){ const src=await photoSrc(img.dataset.vsrc); if(src) img.src=src; }
 }
 /* ---- health page ---- */
 const STAGE_NAMES={1:'awake',2:'asleep',3:'out of bed',4:'light',5:'deep',6:'REM',7:'awake in bed'};
@@ -1218,27 +1285,28 @@ document.addEventListener('keydown', e=>{ const G=$('#gal'); if(!G.classList.con
 const hideSheet=()=>{ $('#scrim').classList.remove('on'); $('#sheet').classList.remove('open'); };
 $('#fab').onclick=()=>openDrawer();
 $('#scrim').onclick=()=>closeLayer('sheet');
-$$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ if(b.dataset.page==='notes'){ closeLayer('sheet'); goPane(0); return; } hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
+$$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ if(b.dataset.page==='notes'){ closeLayer('sheet'); goPane(0); return; } if(b.dataset.page==='vision'){ closeLayer('sheet'); goPane(2); return; } if(b.dataset.page==='workout'){ closeLayer('sheet'); goPane(1); return; } hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
 $('#pageBack').onclick=()=>closeLayer('page');
 const PAGER={idx:1, notesRendered:false};
 function renderNotesPane(){ const B=$('#notesBody'), A=$('#notesAct'); pageNotes(B, null, A); PAGER.notesRendered=true; }
-function goPane(i, animate){ PAGER.idx=i; const t=$('#ptrack'); t.classList.toggle('drag', animate===false); t.style.transform=`translateX(${i===0?0:-50}%)`; if(animate===false) requestAnimationFrame(()=>t.classList.remove('drag')); LS.set('pane', i===0?'notes':'workout'); $('#chatFab').classList.toggle('hidden', i===0); if(i===0) renderNotesPane(); }
+const PANE_NAMES=['notes','workout','vision'];
+function goPane(i, animate){ i=Math.max(0,Math.min(2,i)); PAGER.idx=i; const t=$('#ptrack'); t.classList.toggle('drag', animate===false); t.style.transform=`translateX(${-i*33.3333}%)`; if(animate===false) requestAnimationFrame(()=>t.classList.remove('drag')); LS.set('pane', PANE_NAMES[i]); $('#chatFab').classList.toggle('hidden', i===0); if(i===0) renderNotesPane(); if(i===2) renderVisionPane(); }
 (function(){ let sx=null, sy=null, mode=null, t0=0, lastX=0, lastT=0, W=()=>innerWidth, sheetW=()=>$('#sheet').offsetWidth||300;
   const track=()=>$('#ptrack'), sheet=()=>$('#sheet'), scrim=()=>$('#scrim');
   const busy=()=>$('#page').classList.contains('open') || $('#pad').classList.contains('open') || $('#modal').classList.contains('on') || $('#gal').classList.contains('on');
   document.addEventListener('touchstart', e=>{ mode=null; if(!CFG.key || e.touches.length!==1 || busy()) return; if(e.target.closest('.datestrip, .last, .segs, .chips, .meters, .pin, select, input, textarea, .chatbar')) return; const t=e.touches[0]; sx=t.clientX; sy=t.clientY; t0=Date.now(); lastX=sx; lastT=t0; mode='pending'; }, {passive:true});
   document.addEventListener('touchmove', e=>{ if(!mode || mode==='off') return; const t=e.touches[0]; const dx=t.clientX-sx, dy=t.clientY-sy; lastX=t.clientX; lastT=Date.now();
     if(mode==='pending'){ if(Math.abs(dy)>10 && Math.abs(dy)>Math.abs(dx)){ mode='off'; return; } if(Math.abs(dx)<12) return; mode = sheet().classList.contains('open') ? 'drawer' : 'pane'; track().classList.add('drag'); sheet().style.transition='none'; scrim().style.transition='none'; }
-    if(mode==='pane'){ const base = PAGER.idx===0 ? 0 : -W();
+    if(mode==='pane'){ const base = -PAGER.idx*W();
       if(PAGER.idx===0 && dx>0){ const sw=sheetW(); const o=Math.min(sw, dx); sheet().style.transform=`translateX(${-sw+o}px)`; scrim().style.opacity=(o/sw*1); scrim().style.pointerEvents='none'; scrim().classList.add('on'); }
-      else if(PAGER.idx===1 && dx<0){ track().style.transform=`translateX(${base+dx*0.22}px)`; }
+      else if(PAGER.idx===2 && dx<0){ track().style.transform=`translateX(${base+dx*0.22}px)`; }
       else { track().style.transform=`translateX(${base+dx}px)`; } }
     if(mode==='drawer'){ const sw=sheetW(); const o=Math.max(-sw, Math.min(0, dx)); sheet().style.transform=`translateX(${o}px)`; scrim().style.opacity=1+o/sw; }
   }, {passive:true});
   document.addEventListener('touchend', e=>{ if(mode!=='pane' && mode!=='drawer'){ mode=null; return; } const dx=lastX-sx; const vel=(lastX-sx)/Math.max(1,(lastT-t0)); const W0=W(); const sw=sheetW();
     track().classList.remove('drag'); sheet().style.transition=''; scrim().style.transition=''; scrim().style.pointerEvents='';
     if(mode==='pane'){
-      if(PAGER.idx===1){ if(dx>W0/4 || vel>0.45) goPane(0); else goPane(1); }
+      if(PAGER.idx>=1){ if(dx>W0/4 || vel>0.45) goPane(PAGER.idx-1); else if(dx<-W0/4 || vel<-0.45) goPane(PAGER.idx+1); else goPane(PAGER.idx); }
       else { if(dx<-W0/4 || vel<-0.45){ sheet().style.transform=''; scrim().style.opacity=''; scrim().classList.remove('on'); goPane(1); }
              else if(dx>sw/3 || vel>0.45){ sheet().style.transform=''; scrim().style.opacity=''; scrim().classList.remove('on'); openDrawer(); goPane(0); }
              else { sheet().style.transform=''; scrim().style.opacity=''; scrim().classList.remove('on'); goPane(0); } } }
@@ -1260,6 +1328,7 @@ function renderPage(kind, arg){
   else if(kind==='volume') pageVolume(B,T,A);
   else if(kind==='health') pageHealth(B,T,A);
   else if(kind==='notes') pageNotes(B,T,A);
+  else if(kind==='journal') pageJournal(B,T,A);
   else if(kind==='diet') pageDiet(B,T,A);
   else if(kind==='coach') pageCoach(B,T,A);
   else if(kind==='plans') pagePlans(B,T,A);
@@ -1589,7 +1658,7 @@ if(!CFG.key){
   $('#keyGo').onclick=()=>{ const k=$('#keyIn').value.trim(); if(!k) return; try{ localStorage.setItem('iron.key',k); }catch(e){} location.reload(); };
   $('#fab').classList.add('hidden'); $('#chatFab').classList.add('hidden'); setStatus('off','locked');
 } else {
-  render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline'); updateChatBadge(); goPane(LS.get('pane','notes')==='workout'?1:0, false);
+  render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline'); updateChatBadge(); goPane(Math.max(0, PANE_NAMES.indexOf(LS.get('pane','notes'))), false);
   fullSync().then(()=>{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }

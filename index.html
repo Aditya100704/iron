@@ -796,13 +796,18 @@ function pageNotes(B,T,A){
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
-    let listening=false, base=''; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
-    mic.onclick=async()=>{ if(listening){ try{ await SR.stop(); }catch(e){} setL(false); return; }
+    // one tap starts, one tap stops. Android's recogniser ends itself on every pause, so while the mic is "on" we restart it
+    // the moment it stops and keep appending — the pause becomes a space, not an ending.
+    let listening=false, base='', cur='', restarting=false; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
+    const startRec=async()=>{ try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ if(listening){ setL(false); toast('Voice failed: '+(e.message||e)); } } };
+    const commit=()=>{ if(cur.trim()){ base=(base?base+' ':'')+cur.trim(); cur=''; } ta.value=base; grow(); };
+    mic.onclick=async()=>{ if(listening){ setL(false); try{ await SR.stop(); }catch(e){} commit(); return; }
       try{ const perm=await SR.requestPermissions(); if(perm && perm.speechRecognition && perm.speechRecognition!=='granted'){ toast('Microphone not allowed'); return; } }catch(e){}
-      base=ta.value.trim(); setL(true); toast('Listening… tap ■ when done');
-      try{ SR.removeAllListeners && SR.removeAllListeners(); SR.addListener('partialResults', d=>{ const m=(d&&d.matches&&d.matches[0])||''; ta.value=(base?base+' ':'')+m; grow(); });
-        SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ setL(false); grow(); } });
-        await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ setL(false); toast('Voice failed: '+(e.message||e)); } };
+      base=ta.value.trim(); cur=''; setL(true); toast('Listening — tap ■ when you are done');
+      try{ SR.removeAllListeners && SR.removeAllListeners();
+        SR.addListener('partialResults', d=>{ cur=(d&&d.matches&&d.matches[0])||''; ta.value=(base?base+' ':'')+cur; grow(); });
+        SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ commit(); if(listening && !restarting){ restarting=true; setTimeout(()=>{ restarting=false; if(listening) startRec(); }, 250); } } });
+        await startRec(); }catch(e){ setL(false); toast('Voice failed: '+(e.message||e)); } };
   }
   $$('#pageBody [data-tick]').forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   $$('#pageBody [data-tid]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });

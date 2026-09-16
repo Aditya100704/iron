@@ -1209,10 +1209,13 @@ $$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ hideSheet(); if(LAYERS.lengt
 $('#pageBack').onclick=()=>closeLayer('page');
 const openDrawer=()=>{ if($('#sheet').classList.contains('open')) return; $('#scrim').classList.add('on'); $('#sheet').classList.add('open'); pushLayer('sheet', hideSheet); };
 document.querySelector('header .brand, .brand') && (document.querySelector('header .brand, .brand').onclick=()=>{ if(CFG.key) openDrawer(); });
-// edge swipes: from the left edge → the menu drawer; from the right edge → Notes. Only on the home screen, only when nothing else is open.
-(function(){ let sx=null, sy=null, edge=null; const W=()=>innerWidth;
-  document.addEventListener('touchstart', e=>{ if(!CFG.key || e.touches.length!==1) return; const t=e.touches[0]; const homeOnly=!$('#page').classList.contains('open') && !$('#pad').classList.contains('open') && !$('#modal').classList.contains('on') && !$('#gal').classList.contains('on') && !$('#sheet').classList.contains('open'); if(!homeOnly) return; if(t.clientX<=28) edge='left'; else if(t.clientX>=W()-28) edge='right'; else edge=null; sx=t.clientX; sy=t.clientY; }, {passive:true});
-  document.addEventListener('touchend', e=>{ if(!edge || sx==null) return; const t=e.changedTouches[0]; const dx=t.clientX-sx, dy=Math.abs(t.clientY-sy); if(dy<80){ if(edge==='left' && dx>60) openDrawer(); if(edge==='right' && dx<-60) openPage('notes'); } edge=null; sx=sy=null; }, {passive:true}); })();
+// swipes on the home screen: Android's own back gesture owns the screen edges, so the app listens to the whole screen instead —
+// a clear sideways pull (not started on a strip that scrolls sideways) opens the drawer (→) or Notes (←).
+(function(){ let sx=null, sy=null, active=false, fired=false;
+  const homeOnly=()=>!$('#page').classList.contains('open') && !$('#pad').classList.contains('open') && !$('#modal').classList.contains('on') && !$('#gal').classList.contains('on') && !$('#sheet').classList.contains('open');
+  document.addEventListener('touchstart', e=>{ active=false; fired=false; if(!CFG.key || e.touches.length!==1 || !homeOnly()) return; if(e.target.closest('.datestrip, .last, .segs, .chips, .meters, .pin, select, input, textarea')) return; const t=e.touches[0]; sx=t.clientX; sy=t.clientY; active=true; }, {passive:true});
+  document.addEventListener('touchmove', e=>{ if(!active || fired) return; const t=e.touches[0]; const dx=t.clientX-sx, dy=t.clientY-sy; if(Math.abs(dy)>40 && Math.abs(dy)>Math.abs(dx)){ active=false; return; } if(dx>70 && Math.abs(dy)<45){ fired=true; active=false; openDrawer(); } else if(dx<-70 && Math.abs(dy)<45){ fired=true; active=false; openPage('notes'); } }, {passive:true});
+  document.addEventListener('touchend', ()=>{ active=false; }, {passive:true}); })();
 $('#chatFab').onclick=()=>{ if($('#page').classList.contains('open') && $('#pageTitle').textContent==='Notes') return; openPage('notes'); };
 function openPage(kind, arg, replace){
   pushLayer('page', ()=>{ const below=[...LAYERS].reverse().find(l=>l.kind==='page'); if(below) renderPage(below.data.kind, below.data.arg); else { $('#page').classList.remove('open'); $('#chatFab').classList.remove('hidden'); if(CFG.key) $('#fab').classList.remove('hidden'); } }, {kind, arg}, replace);

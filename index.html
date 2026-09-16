@@ -85,8 +85,9 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .prescribe .note{color:var(--gold);opacity:.9}
 .prescribe .over{color:var(--green)}
 .prescribe .suggest{color:var(--blue);background:transparent;border:1px solid var(--line2);border-radius:7px;padding:3px 8px;font-size:12px}
-.last{font-size:12px;color:var(--dim);padding:0 14px 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.last .chip{background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:2px 7px;font-family:var(--mono);color:var(--muted);font-size:12px}
+.last{font-size:12px;color:var(--dim);padding:0 14px 10px;display:flex;gap:6px;flex-wrap:nowrap;align-items:center;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.last::-webkit-scrollbar{display:none}
+.last .chip{background:var(--bg2);border:1px solid var(--line);border-radius:7px;padding:2px 7px;font-family:var(--mono);color:var(--muted);font-size:12px;white-space:nowrap;flex:none}
 .last .chip.best{border-color:#4a3d13;color:var(--gold)}
 .sets{border-top:1px solid var(--line)}
 .setrow{display:grid;grid-template-columns:34px 1fr 1fr 74px 30px;gap:8px;align-items:center;padding:8px 10px 8px 12px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -95,6 +96,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .setrow.pr .n{color:var(--gold)}
 .setrow.lc .n::after{content:'~';color:var(--muted);font-size:11px;margin-left:2px}
 .setrow .ss{color:var(--gold);font-size:13px;margin-left:5px}
+.setrow .pp{color:var(--muted);font-family:var(--mono);font-size:11px;margin-left:4px}
 .setrow .ss.hardtag{color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
 .daymeta .clock{cursor:pointer;border-bottom:1px dotted var(--muted)}
 .setrow .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px;padding:8px 6px;background:var(--bg2);border:1px solid var(--line);border-radius:9px;text-align:center;position:relative}
@@ -124,6 +126,11 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .pad .field .flabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px;min-height:24px}
 .unitbtn{font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-transform:none;padding:2px 10px;min-height:24px;border-radius:7px;background:var(--raised);border:1px solid var(--line2);color:var(--gold)}
 .unitbtn.lb{color:var(--blue);border-color:#2d4262}
+.pad .partrow{display:flex;align-items:center;gap:6px;margin-top:10px}
+.pad .partrow .lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.pad .partrow input{width:64px;min-height:38px;height:38px;padding:0;text-align:center;font-family:var(--mono);font-size:18px;background:var(--bg2);border:1px solid var(--line);border-radius:9px}
+.pad .partrow .step{width:34px;height:34px}
+.pad .partrow .hint{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pad .padnote{width:100%;margin-top:10px;min-height:0;height:42px;padding:8px 12px;font-size:14px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
 .pad .field .row{display:flex;align-items:center;gap:6px}
 .pad .field input{border:0;background:transparent;padding:0;font-size:30px;font-family:var(--display);letter-spacing:0;flex:1 1 0;min-width:0;width:auto;min-height:0;height:44px;color:var(--text);text-align:center;appearance:textfield;-moz-appearance:textfield}
@@ -217,7 +224,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .gal .track{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .gal .track::-webkit-scrollbar{display:none}
 .gal .slide{flex:0 0 100vw;width:100vw;height:100%;scroll-snap-align:center;scroll-snap-stop:always;display:grid;place-items:center;position:relative}
-.gal .slide img{max-width:100vw;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;touch-action:none;transform-origin:center center;will-change:transform}
+.gal .slide img{max-width:100vw;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;touch-action:pan-x pan-y pinch-zoom;transform-origin:center center;will-change:transform}
 .gal .slide .ph-ld{color:var(--muted);font-family:var(--mono);font-size:12px}
 .gal .galx{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:42px;height:42px;border-radius:50%;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:26px;line-height:1;display:grid;place-items:center;z-index:2}
 .gal .galbar{background:linear-gradient(transparent, rgba(0,0,0,.85));color:#fff;padding:14px 16px calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:10px;position:absolute;left:0;right:0;bottom:0;transition:opacity .2s}
@@ -332,6 +339,7 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
     <div class="field"><div class="flabel">Reps</div><div class="row"><button class="step" data-rstep="-1">−</button><input id="padR" type="number" inputmode="numeric" placeholder="0"><button class="step" data-rstep="1">+</button></div></div>
   </div>
   <div class="rirrow"><button class="lbl" id="rirLbl" type="button" title="Tap to switch RIR / RPE">RIR</button><div class="chips" id="rirChips"></div></div>
+  <div class="partrow"><span class="lbl">+ partials</span><button class="step" data-pstep="-1" type="button">−</button><input id="padP" type="number" inputmode="numeric" placeholder="0" min="0"><button class="step" data-pstep="1" type="button">+</button><span class="hint">half reps after failure, e.g. lateral raises</span></div>
   <input id="padNote" class="padnote" placeholder="Note for this set (optional)" autocomplete="off" enterkeyhint="done">
   <div class="hint" id="padHint"></div>
   <div class="actions"><button class="cancel" id="padCancel">×</button><button class="log" id="padLog">Log set</button></div>
@@ -475,6 +483,8 @@ const exInfo = name => state.exercises.find(e=>e.name===name) || {name, muscle:'
 const exUnit = name => state.settings.units[name] || exInfo(name).unit || 'kg';
 function exSets(name){ return state.sets.filter(s=>s.exercise===name && s.reps>0); }
 // Halperin 2022: self-reported RIR is ~1 rep off, worse on long sets and far from failure. His threshold: over 15 reps at RIR 3+ = low-confidence effort.
+const partialsOf = c => { const m=/(?:^|\s)p(\d+)(?:\s|$)/.exec(c||''); return m?+m[1]:0; };
+const mkComment = (hard, partials) => [hard?'hard?':'', partials>0?'p'+partials:''].filter(Boolean).join(' ')||null;
 const lowConf = (reps, rir) => +reps>15 && rir!=null && +rir>=3;
 function exBest(name, unit, excludeId){ let best={e1:0,w:0,set:null,repsAt:{}}; for(const s of exSets(name)){ if(s.unit!==unit) continue; if(excludeId && s.id===excludeId) continue; if(lowConf(s.reps,s.rir)) continue; const w=+s.weight, r=+s.reps; const e=e1rm(w,r); if(e>best.e1 || (e===best.e1 && best.set && r>+best.set.reps)){best.e1=e;best.set=s;} if(w>best.w) best.w=w; const k=fmtW(w); if(!(k in best.repsAt)||r>best.repsAt[k]) best.repsAt[k]=r; } return best; }
 // FitNotes-style PR: e1RM best, OR heaviest weight ever, OR most reps ever at a weight lifted before.
@@ -537,7 +547,18 @@ function sessionSheet(){
   const live=span && (Date.now()-span.last)<SESSION_GAP; const dur=span?fmtDur(((live?Date.now():span.last)-span.start)/1000):'—';
   const rests=ss.map(x=>+x.rest_s).filter(r=>r>=15 && r<=600); const avgRest=rests.length?fmtDur(rests.reduce((a,b)=>a+b,0)/rests.length):'—';
   modal(`Session · ${esc(state.session.dayName||'')}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Time</div><div class="v">${dur}</div></div><div class="tile"><div class="k">Sets</div><div class="v">${ss.length}</div></div><div class="tile"><div class="k">PRs</div><div class="v">${prs}</div></div><div class="tile"><div class="k">Avg rest</div><div class="v">${avgRest}</div></div></div><div class="empty" style="text-align:left;padding:8px 0 0">${ton?ton.toLocaleString()+' tonnage · ':''}Finishing stamps the end at your last set, not at now. A gap of more than an hour finishes it on its own.</div></div>`,
-    [{t:'Close'},{t:'Discard',red:true,fn:()=>{ if(!confirm('Discard the open session? Logged sets stay in history.')) return; state.session=null; state.viewDay=null; persist(); stopRest(); render(); }},{t:'Finish session',gold:true,fn:()=>{ const endAt=ss.length?ss[ss.length-1].created_at:new Date().toISOString(); closeSession(endAt); stopRest(); toast(`Session finished · ${ss.length} sets · ${dur}`, true); render(); }}]);
+    [{t:'Close'},{t:'Discard',red:true,fn:()=>{ if(!confirm('Discard the open session? Logged sets stay in history.')) return; state.session=null; state.viewDay=null; persist(); stopRest(); render(); }},{t:'Finish session',gold:true,keep:true,fn:()=>{ const endAt=ss.length?ss[ss.length-1].created_at:new Date().toISOString(); const name=state.session.dayName||''; closeSession(endAt); stopRest(); render(); sessionDone(ss, name, dur); }}]);
+}
+function sessionDone(ss, name, dur){
+  const prs=ss.filter(x=>x.is_pr); const hard=ss.filter(isHard).length; const ton=Math.round(ss.reduce((a,x)=>a+(+x.weight||0)*(+x.reps||0),0));
+  const byEx={}; ss.forEach(x=>(byEx[x.exercise]=byEx[x.exercise]||[]).push(x)); const muscles=[...new Set(ss.map(x=>x.muscle).filter(Boolean))];
+  const head = prs.length>=5 ? `${prs.length} PRs. That is a statement.` : prs.length>=3 ? `${prs.length} PRs. Strong day.` : prs.length===1 ? 'One PR. The book moved.' : prs.length===2 ? 'Two PRs. The book moved twice.' : 'Logged. Consistency is the PR.';
+  const prList = prs.map(x=>{ const kind = x.rir!=null && +x.rir===0 ? 'to failure' : ''; return `<div class="vchg"><b>${esc(x.exercise)}</b><span>${fmtW(x.weight)} ${x.unit} × ${x.reps}${partialsOf(x.comment)?' +'+partialsOf(x.comment)+'p':''}${x.rir!=null?' · RIR '+x.rir:''} ${kind}</span></div>`; }).join('');
+  const exList = Object.keys(byEx).map(k=>`<div class="vs"><span><b>${esc(k)}</b></span><span>${byEx[k].map(x=>fmtW(x.weight)+'×'+x.reps).join(' · ')}</span></div>`).join('');
+  modal(`Session done · ${esc(name)}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Time</div><div class="v">${dur}</div></div><div class="tile"><div class="k">Sets</div><div class="v">${ss.length}<small> ${hard} hard</small></div></div><div class="tile"><div class="k">PRs</div><div class="v" style="color:var(--gold)">${prs.length}</div></div><div class="tile"><div class="k">Tonnage</div><div class="v">${ton.toLocaleString()}</div></div></div>
+    <div class="volcard" style="margin-top:12px"><div class="k">${muscles.join(' · ')}</div><div class="vchg"><b>${head}</b><span>${prs.length?'Congratulations on '+prs.length+' PR'+(prs.length>1?'s':'')+'. Every one of them is a number nobody can take back.':'No PR today — that is fine. The sets are in the book and the book is what grows.'}</span></div>${prList}</div>
+    <div class="empty" style="text-align:left;padding:10px 0 0">${exList}</div></div>`, [{t:'Done',gold:true}]);
+  if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); }
 }
 function sessionSpan(){ const ss=sessionSets(); if(!ss.length) return null; return {start:new Date(ss[0].created_at).getTime(), last:new Date(ss[ss.length-1].created_at).getTime()}; }
 
@@ -597,7 +618,7 @@ function inferredHard(s){
   if(+s.reps>12){ const w=fmtW(s.weight); const best=Math.max(0,...xs.filter(x=>fmtW(x.weight)===w).map(x=>+x.reps)); return best>0 && +s.reps>=0.85*best; }
   const bestE=Math.max(0,...xs.filter(x=>!lowConf(x.reps,x.rir)).map(x=>e1rm(+x.weight,+x.reps))); return bestE>0 && e1rm(+s.weight,+s.reps)>=0.9*bestE;
 }
-function isHard(s){ if(!(+s.reps>0)) return false; if(s.rir!=null) return +s.rir<=3; if(s.comment==='hard?') return true; return inferredHard(s); }
+function isHard(s){ if(!(+s.reps>0)) return false; if(s.rir!=null) return +s.rir<=3; if((s.comment||'').includes('hard?')) return true; return inferredHard(s); }
 function hardSetsWeek(muscle, wk){ const end=addDaysISO(wk,7); let t=0; for(const s of state.sets){ if(s.date<wk || s.date>=end || !isHard(s)) continue; const w=contribOf(s.exercise, s.muscle)[muscle]; if(w) t+=w; } return Math.round(t*10)/10; }
 function plannedWeekly(plan, muscle){ return Math.round(10*plan.data.days.reduce((a,d)=>a+d.slots.reduce((b,s,i)=>{ const w=contribOf(slotExercise(s), s.muscle)[muscle]||0; return b+(w?Math.max(1,(s.sets||3)+volAdj(d.key+':'+i))*w:0); },0),0))/10; }
 function pickSlot(plan, muscle, delta){
@@ -772,7 +793,7 @@ function render(){
       ${slot.logged?'':`<div class="prescribe"><button class="plan" data-sets="${esc(slot.key)}" title="Adjust planned sets"><b>${planned}</b> × ${esc(slot.reps||'8-12')}</button>${volAdj(slot.key)?`<span class="over">${volAdj(slot.key)>0?'+':''}${volAdj(slot.key)} auto</span>`:''}${slot.recCut?'<span class="over" style="color:var(--red)">−1 · not recovered</span>':''}${over?`<span class="over">+${over} over plan</span>`:''}${prevOver&&!mine.length?`<button class="suggest" data-trim="${esc(slot.key)}">−${prevOver} set suggested</button>`:''}${plat?`<button class="plat" data-plat="${esc(slot.key)}">plateau · 3 sessions flat</button>`:''}${slot.note?`<span class="note">${esc(slot.note)}</span>`:''}</div>`}
       <div class="last">${best.set?`<span class="chip best">best ${fmtW(best.set.weight)}×${best.set.reps} · e1RM ${best.e1}</span>`:'<span class="chip">no history</span>'}${last.map(l=>`<span class="chip" title="${l.date}">${l.date.slice(5)}: ${l.sets.map(s=>fmtW(s.weight)+'×'+s.reps).join(' · ')}</span>`).join('')}</div>
       <div class="sets">
-        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.rir==null && isHard(s)?'<span class="ss hardtag">hard</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
+        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${partialsOf(s.comment)?`<small class="pp">+${partialsOf(s.comment)}p</small>`:''}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.rir==null && isHard(s)?'<span class="ss hardtag">hard</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
         ${!slot.logged && mine.length<planned?`<div class="setrow ghost"><div class="n">${mine.length+1}</div><div class="val ${ts?'tgt':''}">${ts?fmtW(ts.w):'—'}</div><div class="val ${ts?'tgt':''}">${ts?ts.r:'—'}</div><div class="rir">${ts?'target':'—'}</div><div></div></div>`:''}
       </div>
       <div class="addset"><button class="add" data-add="${esc(slot.key)}"><span class="plus">+</span> Log set ${mine.length+1}</button><button class="unit ${unit}" data-unit="${esc(name)}">${unit}</button></div>
@@ -955,8 +976,8 @@ function openPad(day, slot){
   $('#padWho').innerHTML=`<b>${esc(name)}</b>${D===todayISO()?'':' <span style="color:var(--gold)">· '+new Date(D+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</span>'}`; $('#padSetN').textContent='set '+(mine.length+1);
   renderUnit();
   $('#padW').value = lastMine ? fmtW(lastMine.weight) : ts ? fmtW(ts.w) : (prevSet&&prevSet.unit===unit?fmtW(prevSet.weight):'');
-  $('#padR').value = ts ? ts.r : lastMine ? lastMine.reps : (prevSet?prevSet.reps:'');
-  $('#padNote').value='';
+  $('#padR').value = lastMine ? lastMine.reps : ts ? ts.r : (prevSet?prevSet.reps:'');
+  $('#padNote').value=''; $('#padP').value=''; $$('#pad [data-pstep]').forEach(b=>{ b.onpointerdown=e=>e.preventDefault(); b.onclick=()=>{ const v=Math.max(0,(+$('#padP').value||0)+(+b.dataset.pstep)); $('#padP').value=v||''; }; });
   pad.wStep=stepFor($('#padW').value);
   renderRir(); updateHint();
   if(!$('#pad').classList.contains('open')) pushLayer('pad', ()=>{ $('#pad').classList.remove('open'); document.activeElement&&document.activeElement.blur(); });
@@ -1003,7 +1024,7 @@ $('#padLog').onclick=()=>{
   const kind=prKind(pad.name,pad.unit,w,r,null,pad.rir); const is_pr=isPR(kind);
   const now=new Date(); const rest_s=prevAny?Math.max(0,Math.round((now-new Date(prevAny.created_at))/1000)):null;
   const note=$('#padNote').value.trim()||null; const tg=pad.target;
-  const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:pad.hard?'hard?':null, note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
+  const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:mkComment(pad.hard, +$('#padP').value||0), note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
   state.sets.push({...row,_local:true}); persist(); enqueue({t:'set.insert', row});
   if(is_pr) firePR(); else if(navigator.vibrate) navigator.vibrate(15);
   const hit = tg && w>=tg.w && r>=tg.r;
@@ -1018,9 +1039,9 @@ function setDetail(id){
   const rest=s.rest_s!=null?s.rest_s:(s.source==='app'&&prev&&s.created_at&&prev.created_at?Math.round((new Date(s.created_at)-new Date(prev.created_at))/1000):null);
   const mode=state.settings.mode||'rir';
   modal(`${s.exercise} · set ${s.set_no||''}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Rest before</div><div class="v">${rest!=null?fmtDur(rest):'—'}</div></div><div class="tile"><div class="k">Target</div><div class="v">${s.target_weight!=null?fmtW(s.target_weight)+'×'+s.target_reps:'—'}</div></div><div class="tile"><div class="k">e1RM</div><div class="v">${e1rm(+s.weight,+s.reps)}${s.is_pr?' <span class="prflag">PR</span>':''}</div></div></div>
-    <div class="form"><div class="row"><label>Weight · ${s.unit}<input id="dW" type="number" inputmode="decimal" step="0.5" value="${fmtW(s.weight)}"></label><label>Reps<input id="dR" type="number" inputmode="numeric" value="${s.reps}"></label></div><input id="dE" type="hidden" value="${mode==='rir'?(s.rir==null?'':s.rir):(s.rpe==null?'':s.rpe)}"><input id="dH" type="hidden" value="${s.comment==='hard?'?'1':''}"><div class="rirrow" style="margin-top:8px"><div class="lbl" style="display:grid;place-items:center">${mode.toUpperCase()}</div><div class="chips" id="dChips">${(mode==='rir'?[0,1,2,3,4]:[6,7,8,9,10]).map(v=>`<button type="button" class="chip ${(mode==='rir'?s.rir:s.rpe)===v?'on':''}" data-dv="${v}">${v}</button>`).join('')}<button type="button" class="chip hardq ${s.comment==='hard?'?'on':''}" data-dv="hard">hard?</button></div></div>
+    <div class="form"><div class="row"><label>Weight · ${s.unit}<input id="dW" type="number" inputmode="decimal" step="0.5" value="${fmtW(s.weight)}"></label><label>Reps<input id="dR" type="number" inputmode="numeric" value="${s.reps}"></label></div><input id="dE" type="hidden" value="${mode==='rir'?(s.rir==null?'':s.rir):(s.rpe==null?'':s.rpe)}"><input id="dH" type="hidden" value="${(s.comment||'').includes('hard?')?'1':''}"><div class="partrow" style="margin-top:8px"><span class="lbl">+ partials</span><input id="dP" type="number" inputmode="numeric" value="${partialsOf(s.comment)||''}" placeholder="0" style="width:64px;min-height:38px;text-align:center"></div><div class="rirrow" style="margin-top:8px"><div class="lbl" style="display:grid;place-items:center">${mode.toUpperCase()}</div><div class="chips" id="dChips">${(mode==='rir'?[0,1,2,3,4]:[6,7,8,9,10]).map(v=>`<button type="button" class="chip ${(mode==='rir'?s.rir:s.rpe)===v?'on':''}" data-dv="${v}">${v}</button>`).join('')}<button type="button" class="chip hardq ${(s.comment||'').includes('hard?')?'on':''}" data-dv="hard">hard?</button></div></div>
     <label>Note for this set<textarea id="dN" placeholder="Felt heavy, grip went, slow eccentric…">${esc(s.note||'')}</textarea></label></div></div>`,
-    [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this set?')) return; state.sets=state.sets.filter(x=>x.id!==id); persist(); enqueue({t:'set.delete', id}); render(); }},{t:'Save',gold:true,fn:()=>{ const w=+$('#dW').value, r=+$('#dR').value; const ev=$('#dE').value===''?null:+$('#dE').value; const body={weight:w,reps:r,note:$('#dN').value.trim()||null, comment:$('#dH').value==='1'?'hard?':null}; if(mode==='rir'){ body.rir=ev; body.rpe=ev==null?null:10-ev; } else { body.rpe=ev; body.rir=ev==null?null:10-ev; } body.is_pr=isPR(prKind(s.exercise,s.unit,w,r,id,body.rir)); Object.assign(s, body); persist(); enqueue({t:'set.update', id, body}); render(); }}]);
+    [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this set?')) return; state.sets=state.sets.filter(x=>x.id!==id); persist(); enqueue({t:'set.delete', id}); render(); }},{t:'Save',gold:true,fn:()=>{ const w=+$('#dW').value, r=+$('#dR').value; const ev=$('#dE').value===''?null:+$('#dE').value; const body={weight:w,reps:r,note:$('#dN').value.trim()||null, comment:mkComment($('#dH').value==='1', +$('#dP').value||0)}; if(mode==='rir'){ body.rir=ev; body.rpe=ev==null?null:10-ev; } else { body.rpe=ev; body.rir=ev==null?null:10-ev; } body.is_pr=isPR(prKind(s.exercise,s.unit,w,r,id,body.rir)); Object.assign(s, body); persist(); enqueue({t:'set.update', id, body}); render(); }}]);
   $$('#dChips .chip').forEach(c=>c.onclick=()=>{ const v=c.dataset.dv; const E=$('#dE'), H=$('#dH'); if(v==='hard'){ const on=H.value!=='1'; H.value=on?'1':''; if(on) E.value=''; } else { const same=E.value===v; E.value=same?'':v; if(!same) H.value=''; } $$('#dChips .chip').forEach(x=>x.classList.toggle('on', x.dataset.dv==='hard'?H.value==='1':(E.value!=='' && x.dataset.dv===E.value))); });
   $$('#dW, #dR').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); });
   $$('#modal input[type=number]').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); i.onclick=()=>i.select(); });
@@ -1209,7 +1230,7 @@ async function rotatePhoto(id){
 function bindZoom(sl){
   const img=sl.querySelector('img'); if(!img || img.dataset.zoom) return; img.dataset.zoom='1';
   let scale=1, tx=0, ty=0, startD=0, startS=1, lastTap=0, panX=0, panY=0, panning=false; const T=$('#galTrack');
-  const apply=()=>{ img.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; img.style.transition='none'; T.style.overflowX = scale>1.02 ? 'hidden' : ''; T.style.scrollSnapType = scale>1.02 ? 'none' : ''; };
+  const apply=()=>{ img.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; img.style.transition='none'; const z=scale>1.02; T.style.overflowX = z ? 'hidden' : ''; T.style.scrollSnapType = z ? 'none' : ''; img.style.touchAction = z ? 'none' : 'pan-x pan-y pinch-zoom'; };
   const reset=()=>{ scale=1; tx=0; ty=0; apply(); img.style.transition='transform .15s'; };
   sl.addEventListener('touchstart', e=>{ if(e.touches.length===2){ startD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); startS=scale; } else if(e.touches.length===1 && scale>1){ panning=true; panX=e.touches[0].clientX-tx; panY=e.touches[0].clientY-ty; } }, {passive:true});
   sl.addEventListener('touchmove', e=>{ if(e.touches.length===2){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); scale=Math.min(5, Math.max(1, startS*d/startD)); apply(); e.preventDefault(); } else if(panning && e.touches.length===1){ tx=e.touches[0].clientX-panX; ty=e.touches[0].clientY-panY; apply(); e.preventDefault(); } }, {passive:false});

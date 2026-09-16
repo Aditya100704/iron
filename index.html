@@ -772,6 +772,9 @@ function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
+function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div><div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
+function bindBubble(el, B,T,A){ const b=el.querySelector('[data-tick]'); if(b) b.onclick=()=>toggleTask(b.dataset.tick, B,T,A); el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); }; }
+function notesStat(){ const items=tasksList(); const D=todayISO(); const el=$('#pageBody .chatstat'); if(el) el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span>`; }
 function pageNotes(B,T,A){
   T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
   const D=todayISO(); const doneToday=items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
@@ -781,9 +784,8 @@ function pageNotes(B,T,A){
   let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span></div>`;
   if(older.length && !showOpen) html+=`<div class="chat"><div class="pin">${older.map(t=>`<button class="p" data-jump="${t.id}"><b>${new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</b>${esc(t.text)}</button>`).join('')}</div></div>`;
   html+='<div class="chat" id="chat">';
-  let lastDay=''; shown.forEach(t=>{ const d=t.created_at.slice(0,10); if(d!==lastDay){ lastDay=d; html+=`<div class="day">${d===D?'Today':new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>`; }
-    const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    html+=`<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div><div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`;
+  let lastDay=''; shown.forEach(t=>{ const d=t.created_at.slice(0,10); if(d!==lastDay){ lastDay=d; html+=`<div class="day" data-d="${d}">${d===D?'Today':new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>`; }
+    html+=bubbleHTML(t);
     if(t.shine && t.done_at && !showOpen) html+=`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; });
   if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
   html+='</div>';
@@ -791,7 +793,9 @@ function pageNotes(B,T,A){
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } };
-  const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } tasksList().push({id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}); tasksSave(); ta.value=''; pageNotes(B,T,A); setTimeout(()=>{ $('#chatIn').focus(); },50); };
+  const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; tasksList().push(t); tasksSave(); ta.value=''; grow();
+    const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
+    const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=$('#page'); P.scrollTop=P.scrollHeight; ta.focus(); };
   sb.onclick=send;
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
@@ -816,11 +820,14 @@ function pageNotes(B,T,A){
 }
 function toggleTask(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
-  if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); pageNotes(B,T,A); return; }
+  const el=$('#t-'+id); const inPlace=!!el && !state.settings.notesOpenOnly;
+  if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); if(!inPlace){ pageNotes(B,T,A); return; } const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); const w=document.createElement('div'); w.innerHTML=bubbleHTML(t); el.replaceWith(w.firstElementChild); bindBubble($('#t-'+id),B,T,A); notesStat(); return; }
   t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && isoLocal(x.done_at)===D).length;
   t.shine = COMBO[n] ? {text:COMBO[n], big:true} : {text:shineLine(), big:false};
-  tasksSave(); pageNotes(B,T,A); confetti(); buzz('double'); play(COMBO[n]?'fanfare':'coin');
-  const el=$('#t-'+id); if(el && el.scrollIntoView) el.scrollIntoView({behavior:'smooth',block:'center'});
+  tasksSave(); confetti(); buzz('double'); play(COMBO[n]?'fanfare':'coin');
+  if(!inPlace){ pageNotes(B,T,A); return; }
+  const w=document.createElement('div'); w.innerHTML=bubbleHTML(t)+`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; const nb=w.firstElementChild, coach=w.lastElementChild; el.replaceWith(nb); nb.after(coach); bindBubble(nb,B,T,A); notesStat();
+  if(coach.scrollIntoView) coach.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function taskMenu(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;

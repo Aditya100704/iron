@@ -231,7 +231,7 @@ header.top{flex:none}
 .datestrip{position:relative;display:flex;gap:5px;overflow-x:auto;scroll-snap-type:x proximity;margin:0 calc(-1 * var(--pad)) 14px;padding:2px var(--pad) 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .datestrip::-webkit-scrollbar{display:none}
 .healthline{color:var(--muted);font-size:13px;margin:-6px 0 12px;letter-spacing:.01em}.healthline b{color:var(--text);font-variant-numeric:tabular-nums}.healthline .warn{color:var(--gold)}
-.chatfab{position:fixed;right:14px;bottom:calc(16px + var(--safe-b));width:44px;height:44px;border-radius:50%;background:var(--surface);border:1px solid var(--line2);color:var(--gold);font-size:18px;display:grid;place-items:center;z-index:40;box-shadow:0 6px 24px rgba(0,0,0,.45);opacity:.92}
+.chatfab{display:none!important;position:fixed;right:14px;bottom:calc(16px + var(--safe-b));width:44px;height:44px;border-radius:50%;background:var(--surface);border:1px solid var(--line2);color:var(--gold);font-size:18px;display:grid;place-items:center;z-index:40;box-shadow:0 6px 24px rgba(0,0,0,.45);opacity:.92}
 .chatfab .n{display:none!important;position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--gold);color:#111;font-family:var(--mono);font-size:11px;font-weight:700;display:grid;place-items:center}
 .chatfab.hidden{display:none}
 .confetti{position:fixed;inset:0;z-index:120;pointer-events:none}
@@ -434,12 +434,13 @@ const LS = { get:(k,d)=>{ try{const v=localStorage.getItem('iron.'+k); return v=
 const MUSCLES=['Chest','Back','Legs','Shoulders','Biceps','Triceps','Abs','Other'];
 
 /* ================= DATA LAYER ================= */
+function keyRevoked(){ try{ localStorage.removeItem('iron.key'); localStorage.setItem('iron.keyMsg','1'); }catch(e){} location.reload(); }
 const api = {
   headers(){ return {"apikey":CFG.anon,"Authorization":"Bearer "+CFG.anon,"x-gym-key":CFG.key,"Content-Type":"application/json"}; },
-  async get(path, range){ const h=this.headers(); if(range) h["Range"]=range; const r=await fetch(CFG.url+"/rest/v1/"+path,{headers:h}); if(!r.ok) throw new Error(await r.text()); return r.json(); },
-  async post(table, rows, prefer="return=minimal"){ const r=await fetch(CFG.url+"/rest/v1/"+table,{method:"POST",headers:{...this.headers(),"Prefer":prefer},body:JSON.stringify(rows)}); if(!r.ok) throw new Error(await r.text()); return prefer.includes("representation")?r.json():null; },
-  async patch(table, q, body){ const r=await fetch(CFG.url+"/rest/v1/"+table+"?"+q,{method:"PATCH",headers:{...this.headers(),"Prefer":"return=minimal"},body:JSON.stringify(body)}); if(!r.ok) throw new Error(await r.text()); },
-  async del(table, q){ const r=await fetch(CFG.url+"/rest/v1/"+table+"?"+q,{method:"DELETE",headers:{...this.headers(),"Prefer":"return=minimal"}}); if(!r.ok) throw new Error(await r.text()); },
+  async get(path, range){ const h=this.headers(); if(range) h["Range"]=range; const r=await fetch(CFG.url+"/rest/v1/"+path,{headers:h}); if(r.status===401){ keyRevoked(); throw new Error('key revoked'); } if(!r.ok) throw new Error(await r.text()); return r.json(); },
+  async post(table, rows, prefer="return=minimal"){ const r=await fetch(CFG.url+"/rest/v1/"+table,{method:"POST",headers:{...this.headers(),"Prefer":prefer},body:JSON.stringify(rows)}); if(r.status===401){ keyRevoked(); throw new Error('key revoked'); } if(!r.ok) throw new Error(await r.text()); return prefer.includes("representation")?r.json():null; },
+  async patch(table, q, body){ const r=await fetch(CFG.url+"/rest/v1/"+table+"?"+q,{method:"PATCH",headers:{...this.headers(),"Prefer":"return=minimal"},body:JSON.stringify(body)}); if(r.status===401){ keyRevoked(); throw new Error('key revoked'); } if(!r.ok) throw new Error(await r.text()); },
+  async del(table, q){ const r=await fetch(CFG.url+"/rest/v1/"+table+"?"+q,{method:"DELETE",headers:{...this.headers(),"Prefer":"return=minimal"}}); if(r.status===401){ keyRevoked(); throw new Error('key revoked'); } if(!r.ok) throw new Error(await r.text()); },
 };
 
 const state = {
@@ -1584,7 +1585,7 @@ if(state.session && state.session.date!==todayISO()){ // an unfinished session c
 // any device: adopt today's workout as the live session so the phone and the laptop show the same day
 if(!state.session){ const w=[...state.workouts].filter(x=>x.date===todayISO()).sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''))[0]; if(w && !w.finished_at){ let notes={}; try{ notes=w.note?JSON.parse(w.note):{}; }catch(e){} state.session={workoutId:w.id,date:w.date,dayKey:w.day_key,dayName:w.day_name,planId:w.plan_id,notes,startedAt:w.started_at}; persist(); } }
 if(!CFG.key){
-  $('#main').innerHTML = `<div style="padding:40px 4px"><div class="brand" style="font-size:44px;margin-bottom:6px"><b>IRON</b></div><div style="color:var(--muted);margin-bottom:22px">Private. Paste the access key the coach sent you. It stays on this phone.</div><div class="form"><input id="keyIn" placeholder="access key" autocomplete="off" autocapitalize="off"><button class="btn gold" id="keyGo">Open</button></div></div>`;
+  $('#main').innerHTML = `<div style="padding:40px 4px"><div class="brand" style="font-size:44px;margin-bottom:6px"><b>IRON</b></div><div style="color:var(--muted);margin-bottom:22px">${(()=>{ let m=''; try{ m=localStorage.getItem('iron.keyMsg'); localStorage.removeItem('iron.keyMsg'); }catch(e){} return m?'The access key was changed, so this phone was signed out. Paste the new key the coach sent you.':'Private. Paste the access key the coach sent you. It stays on this phone.'; })()}</div><div class="form"><input id="keyIn" placeholder="access key" autocomplete="off" autocapitalize="off"><button class="btn gold" id="keyGo">Open</button></div></div>`;
   $('#keyGo').onclick=()=>{ const k=$('#keyIn').value.trim(); if(!k) return; try{ localStorage.setItem('iron.key',k); }catch(e){} location.reload(); };
   $('#fab').classList.add('hidden'); $('#chatFab').classList.add('hidden'); setStatus('off','locked');
 } else {

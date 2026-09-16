@@ -49,9 +49,8 @@ header.top{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg)
 .status.ok .dot{background:var(--green)} .status.off .dot{background:var(--red)} .status.busy .dot{background:var(--gold)}
 main{padding:0 var(--pad) calc(120px + var(--safe-b))}
 html,body{height:100%;overflow:hidden}
-#app{display:flex;flex-direction:column;height:100dvh;min-height:0}
-html.kb .chatbar{padding-bottom:10px}
-html.kb main{padding-bottom:40px}
+body{box-sizing:border-box}
+#app{display:flex;flex-direction:column;height:100%;min-height:0}
 header.top{flex:none}
 #pager{flex:1;min-height:0;overflow:hidden;position:relative}
 #pager .track{display:flex;width:300%;height:100%;transform:translateX(-33.3333%);transition:transform .28s cubic-bezier(.2,.8,.2,1);will-change:transform}
@@ -59,8 +58,11 @@ header.top{flex:none}
 #pager .pane{width:33.3333%;height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative;display:flex;flex-direction:column}
 .panehead{display:flex;align-items:center;justify-content:space-between;padding:6px var(--pad) 4px}
 .panehead h2{font-family:var(--display);font-size:30px;margin:0;letter-spacing:.02em}
-.panebody{padding:0 var(--pad) 0;flex:1;display:flex;flex-direction:column}
-.panebody .chatbar{position:sticky;bottom:0;margin:auto calc(-1 * var(--pad)) 0}
+.panebody{padding:0 var(--pad) 0;flex:1;display:flex;flex-direction:column;min-height:0}
+#paneNotes{overflow:hidden}
+#paneNotes .panebody{overflow:hidden}
+#paneNotes .chatscroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.panebody .chatbar{position:static;flex:none;margin:0 calc(-1 * var(--pad)) 0}
 
 .dayhead{padding:2px 0 8px}
 .daypick{position:relative;display:flex;align-items:center;gap:10px;cursor:pointer}
@@ -836,12 +838,13 @@ function pageNotes(B,T,A){
   if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
   html+='</div>';
   html+=`<div class="chatbar" id="chatbar"><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · journal …)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
+  const barAt=html.lastIndexOf('<div class="chatbar"'); html='<div class="chatscroll" id="chatScroll">'+html.slice(0,barAt)+'</div>'+html.slice(barAt);
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
-  ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } };
+  ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }; ta.onfocus=()=>setTimeout(()=>{ const P=$('#chatScroll'); if(P) P.scrollTop=P.scrollHeight; },250);
   const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
     const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
-    const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
+    const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
   sb.onclick=send; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal');
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
@@ -862,7 +865,7 @@ function pageNotes(B,T,A){
   [...B.querySelectorAll('[data-tick]')].forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   [...B.querySelectorAll('[data-tid]')].forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
   [...B.querySelectorAll('[data-jump]')].forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
-  const P=B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight;
+  const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight;
 }
 function toggleTask(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
@@ -1666,7 +1669,6 @@ if(!CFG.key){
   fullSync().then(()=>{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
-(function(){ const vv=window.visualViewport; if(!vv) return; const app=$('#app'); const fit=()=>{ const kb=Math.max(0, innerHeight - vv.height - vv.offsetTop); app.style.height = vv.height+'px'; document.documentElement.classList.toggle('kb', kb>120); }; vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit(); })();
 if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 // photos shared from the gallery (Android share sheet → IRON): the native side queues them, the page saves them as progress photos
 async function drainSharedPhotos(){ const P=isNative() && Capacitor.Plugins && Capacitor.Plugins.IronShare; if(!P) return; try{ const r=await P.getPending(); const imgs=(r&&r.images)||[]; const D=todayISO(); let added=0, dup=0; const dates=new Set();

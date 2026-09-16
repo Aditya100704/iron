@@ -243,6 +243,9 @@ main{flex:1;padding:0 var(--pad) calc(120px + var(--safe-b))}
 .chatbar textarea{flex:1;min-height:44px;max-height:120px;height:44px;resize:none;padding:11px 14px;border-radius:22px;background:var(--surface);border:1px solid var(--line2);color:var(--text);font-size:15.5px;line-height:1.3}
 .chatbar .send{width:44px;height:44px;border-radius:50%;background:var(--gold);color:#111;border:0;font-size:20px;display:grid;place-items:center;flex:none}
 .chatbar .send:disabled{opacity:.35}
+.chatbar .mic{width:44px;height:44px;border-radius:50%;background:var(--surface);color:var(--text);border:1px solid var(--line2);font-size:20px;display:grid;place-items:center;flex:none}
+.chatbar .mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(214,101,90,.5)}50%{box-shadow:0 0 0 10px rgba(214,101,90,0)}}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
 .chatstat b{color:var(--gold)}
 .gal{position:fixed;inset:0;background:#000;z-index:95;display:none;flex-direction:column}
@@ -784,12 +787,23 @@ function pageNotes(B,T,A){
     if(t.shine && t.done_at && !showOpen) html+=`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; });
   if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
   html+='</div>';
-  html+=`<div class="chatbar" id="chatbar"><textarea id="chatIn" rows="1" placeholder="Message yourself… (a task, or ‑ a note)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="send" id="chatSend" disabled>▲</button></div>`;
+  html+=`<div class="chatbar" id="chatbar"><textarea id="chatIn" rows="1" placeholder="Message yourself… (a task, or ‑ a note)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } };
   const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } tasksList().push({id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}); tasksSave(); ta.value=''; pageNotes(B,T,A); setTimeout(()=>{ $('#chatIn').focus(); },50); };
   sb.onclick=send;
+  // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
+  const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
+  if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
+    let listening=false, base=''; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
+    mic.onclick=async()=>{ if(listening){ try{ await SR.stop(); }catch(e){} setL(false); return; }
+      try{ const perm=await SR.requestPermissions(); if(perm && perm.speechRecognition && perm.speechRecognition!=='granted'){ toast('Microphone not allowed'); return; } }catch(e){}
+      base=ta.value.trim(); setL(true); toast('Listening… tap ■ when done');
+      try{ SR.removeAllListeners && SR.removeAllListeners(); SR.addListener('partialResults', d=>{ const m=(d&&d.matches&&d.matches[0])||''; ta.value=(base?base+' ':'')+m; grow(); });
+        SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ setL(false); grow(); } });
+        await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ setL(false); toast('Voice failed: '+(e.message||e)); } };
+  }
   $$('#pageBody [data-tick]').forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   $$('#pageBody [data-tid]').forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
   $$('#pageBody [data-jump]').forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });

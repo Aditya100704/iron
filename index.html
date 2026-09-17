@@ -852,24 +852,30 @@ function pageNotes(B,T,A){
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }; ta.onfocus=()=>setTimeout(()=>{ const P=$('#chatScroll'); if(P) P.scrollTop=P.scrollHeight; },250);
-  const send=()=>{ const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
+  let voiceSeal=()=>{};
+  const send=()=>{ voiceSeal(); const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
     const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
     const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
   sb.onclick=send; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal');
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
-    // one utterance per tap: the recogniser stops itself at the first pause (or tap again to stop). No restart loop.
-    let listening=false, base='', cur=''; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
+    // one utterance per tap. The plugin says "stopped" at end-of-speech, but the FINAL transcript arrives after that (as one more
+    // partialResults event) — so after "stopped" we keep the text open for a grace window instead of closing at once.
+    let mode='off', base='', cur='', grace=null; const setL=v=>{ mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
     const norm=x=>(x||'').trim().replace(/\s+/g,' ');
-    const finish=()=>{ if(!listening) return; setL(false); ta.value=norm((base?base+' ':'')+cur); cur=''; grow(); };
-    mic.onclick=async()=>{ if(listening){ try{ await SR.stop(); }catch(e){} finish(); return; }
+    const paint=()=>{ ta.value=norm((base?base+' ':'')+cur); grow(); };
+    const seal=()=>{ clearTimeout(grace); if(mode==='off') return; mode='off'; setL(false); paint(); cur=''; };
+    voiceSeal=()=>{ if(mode!=='off'){ seal(); try{ SR.stop(); }catch(e){} } };
+    const closing=()=>{ if(mode!=='on') return; mode='closing'; setL(false); clearTimeout(grace); grace=setTimeout(seal, 2500); };
+    mic.onclick=async()=>{ if(mode==='on'){ closing(); try{ await SR.stop(); }catch(e){} return; }
+      seal();
       try{ const perm=await SR.requestPermissions(); if(perm && perm.speechRecognition && perm.speechRecognition!=='granted'){ toast('Microphone not allowed'); return; } }catch(e){}
       try{ SR.removeAllListeners && await SR.removeAllListeners(); }catch(e){}
-      base=norm(ta.value); cur=''; setL(true);
-      SR.addListener('partialResults', d=>{ if(!listening) return; const m=norm((d&&d.matches&&d.matches[0])||''); if(!m) return; cur=m; ta.value=norm((base?base+' ':'')+cur); grow(); });
-      SR.addListener('listeningState', d=>{ if(d && d.status==='stopped') finish(); });
-      try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ finish(); } };
+      base=norm(ta.value); cur=''; mode='on'; setL(true);
+      SR.addListener('partialResults', d=>{ if(mode==='off') return; const m=norm((d&&d.matches&&d.matches[0])||''); if(!m) return; if(m.length>=cur.length || mode==='closing' || !cur.toLowerCase().startsWith(m.toLowerCase())) cur=m; paint(); });
+      SR.addListener('listeningState', d=>{ if(d && d.status==='stopped') closing(); });
+      try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ closing(); } };
   }
   [...B.querySelectorAll('[data-tick]')].forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   [...B.querySelectorAll('[data-tid]')].forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });

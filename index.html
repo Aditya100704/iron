@@ -276,6 +276,7 @@ header.top{flex:none}
 .chatbar .clip{width:44px;height:44px;border-radius:50%;background:var(--surface);color:var(--text);border:1px solid var(--line2);font-size:19px;display:grid;place-items:center;flex:none}
 .chatbar{flex-wrap:wrap}
 .chatbar .att{flex-basis:100%;display:flex;align-items:center;gap:10px;padding:0 4px 2px}
+.chatbar .att[hidden]{display:none}
 .chatbar .att img{width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid var(--line2)}
 .chatbar .att button{background:none;border:0;color:var(--dim);font-size:13px;padding:8px}
 .bub .timg{display:block;max-width:210px;max-height:240px;min-width:120px;min-height:90px;border-radius:12px;margin-bottom:6px;background:var(--bg2);object-fit:cover}
@@ -461,6 +462,7 @@ header.top{flex:none}
 <div class="modal" id="modal"><div class="box"><h3 id="modalTitle">Note</h3><div id="modalBody"></div><div class="acts" id="modalActs"></div></div></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="photoIn" accept="image/*" multiple class="hidden">
+<input type="file" id="chatFile" accept="image/*" class="hidden">
 
 <script>
 /* ================= CONFIG (injected at build) ================= */
@@ -838,6 +840,7 @@ function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
+const NOTE_ATT={b64:null}; /* photo picked for the next note; module-level so a pane rebuild cannot lose it */
 function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div>${t.img?`<img class="timg" data-timg="${t.img}" alt="">`:''}<div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
 const TASK_IMG={};
 async function taskImgSrc(id){ if(TASK_IMG[id]) return TASK_IMG[id]; const r=await api.get('photos?select=data_b64,mime&id=eq.'+id); if(r && r[0] && r[0].data_b64){ TASK_IMG[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; return TASK_IMG[id]; } return null; }
@@ -859,18 +862,21 @@ function pageNotes(B,T,A){
     if(t.shine && t.done_at && !showOpen) html+=`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; });
   if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
   html+='</div>';
-  html+=`<div class="chatbar" id="chatbar"><div class="att" id="chatAtt" hidden><img id="chatAttImg" alt=""><button id="chatAttX">Remove</button></div><button class="clip" id="chatClip" aria-label="Attach a photo">＋</button><input type="file" id="chatFile" accept="image/*" hidden><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · journal …)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
+  html+=`<div class="chatbar" id="chatbar"><div class="att" id="chatAtt" hidden><img id="chatAttImg" alt=""><button id="chatAttX">Remove</button></div><button class="clip" id="chatClip" aria-label="Attach a photo">＋</button><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · journal …)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
   const barAt=html.lastIndexOf('<div class="chatbar"'); html='<div class="chatscroll" id="chatScroll">'+html.slice(0,barAt)+'</div>'+html.slice(barAt);
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim() && !att; }; ta.oninput=grow;
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }; ta.onfocus=()=>setTimeout(()=>{ const P=$('#chatScroll'); if(P) P.scrollTop=P.scrollHeight; },250);
-  let voiceSeal=()=>{}; let att=null;
-  const send=()=>{ voiceSeal(); const raw=ta.value.trim() || (att?'Photo':''); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; if(att){ const pid=uid(); t.img=pid; TASK_IMG[pid]='data:image/jpeg;base64,'+att; savePhoto({id:pid, date:todayISO(), taken_at:t.created_at, mime:'image/jpeg', data_b64:att, note:'task:'+t.id}); clearAtt(); } tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
+  let voiceSeal=()=>{}; let att=NOTE_ATT.b64;
+  const send=()=>{ voiceSeal(); const raw=ta.value.trim() || (att?'Photo':''); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; if(att){ const pid=uid(); t.img=pid; TASK_IMG[pid]='data:image/jpeg;base64,'+att; savePhoto({id:pid, date:todayISO(), taken_at:t.created_at, mime:'image/jpeg', data_b64:att, note:'task:'+t.id}).then(ok=>{ if(!ok) toast('Photo will upload when the connection is back'); }); clearAtt(); } tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
     const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
     const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
-  const clearAtt=()=>{ att=null; $('#chatAtt').hidden=true; $('#chatFile').value=''; grow(); };
-  $('#chatClip').onclick=()=>$('#chatFile').click(); $('#chatAttX').onclick=clearAtt;
-  $('#chatFile').onchange=async e=>{ const f=e.target.files && e.target.files[0]; if(!f) return; try{ att=await shrink(f, 1280, .82); $('#chatAttImg').src='data:image/jpeg;base64,'+att; $('#chatAtt').hidden=false; grow(); }catch(err){ toast('Could not read that image'); } };
+  const showAtt=()=>{ const box=$('#chatAtt'); if(att){ $('#chatAttImg').src='data:image/jpeg;base64,'+att; box.hidden=false; } else { box.hidden=true; $('#chatAttImg').removeAttribute('src'); } grow(); };
+  const clearAtt=()=>{ att=null; NOTE_ATT.b64=null; $('#chatFile').value=''; showAtt(); };
+  const rawB64=f=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(f); });
+  $('#chatClip').onclick=e=>{ e.preventDefault(); $('#chatFile').click(); }; $('#chatAttX').onclick=e=>{ e.preventDefault(); e.stopPropagation(); clearAtt(); };
+  $('#chatFile').onchange=async e=>{ const f=e.target.files && e.target.files[0]; if(!f) return; toast('Adding photo…'); let b=null; try{ b=await shrink(f, 1280, .82); }catch(err){ try{ if(f.size<4e6) b=await rawB64(f); }catch(e2){} } if(!b){ toast('Could not read that image'); return; } NOTE_ATT.b64=b; att=b; if($('#chatAtt')) showAtt(); else renderNotesPane(true); };
+  showAtt();
   sb.onclick=send; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal');
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');

@@ -288,6 +288,8 @@ header.top{flex:none}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
 .chatstat b{color:var(--gold)}
 .chatstat .jlink{margin-left:auto;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--text);font-family:var(--mono);font-size:12px;min-height:0}
+.vfeed{display:flex;flex-direction:column;gap:10px;padding:4px 0 28px}
+.vfeed img{width:100%;border-radius:14px;display:block;background:var(--surface);min-height:120px}
 .vcount{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 12px}
 .vcount .c{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
 .vcount .n{font-family:var(--display);font-size:30px;color:var(--gold);line-height:1;font-variant-numeric:tabular-nums}
@@ -532,7 +534,7 @@ async function fullSync(){
     const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; const local=state.tasks||{items:[]}; const lt=local.updated||0, rt=remote.updated||0; if(rt>=lt) state.tasks=remote; else enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); LS.set('tasks', state.tasks); }
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
-    try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,note.not.like.task:*)&order=taken_at.desc&limit=2000'); }catch(e){}
+    try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,and(note.not.like.task:*,note.not.like.vision:*))&order=taken_at.desc&limit=2000'); }catch(e){}
     try{ const [hd,hs]=await Promise.all([api.get('health_daily?select=*&order=date.desc&limit=90'), api.get('health_sessions?select=*&order=start_at.desc&limit=200')]); const H=state.health; hd.forEach(r=>{ H.daily[r.date]=Object.assign(H.daily[r.date]||{}, r); }); hs.forEach(r=>{ H.sessions[r.id]=r; }); LS.set('health',H); }catch(e){ console.warn('health pull',e); }
     if(plans.length) state.plans = plans; else { const p={id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true}; await api.post("plans",[p]); state.plans=[p]; }
     let all=[], from=0; const page=1000;
@@ -842,6 +844,9 @@ function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
 const NOTE_ATT={b64:null}; /* photo picked for the next note; module-level so a pane rebuild cannot lose it */
 function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div>${t.img?`<img class="timg" data-timg="${t.img}" alt="">`:''}<div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
+function idb(){ return new Promise((res,rej)=>{ try{ const r=indexedDB.open('iron-cache',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }catch(e){ rej(e); } }); }
+async function idbGet(k){ try{ const d=await idb(); return await new Promise(res=>{ const q=d.transaction('kv').objectStore('kv').get(k); q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null); }); }catch(e){ return null; } }
+async function idbSet(k,v){ try{ const d=await idb(); d.transaction('kv','readwrite').objectStore('kv').put(v,k); }catch(e){} }
 const TASK_IMG={};
 async function taskImgSrc(id){ if(TASK_IMG[id]) return TASK_IMG[id]; const r=await api.get('photos?select=data_b64,mime&id=eq.'+id); if(r && r[0] && r[0].data_b64){ TASK_IMG[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; return TASK_IMG[id]; } return null; }
 function loadTaskImgs(root){ [...(root||document).querySelectorAll('img[data-timg]')].forEach(im=>{ if(im.dataset.ok) return; im.dataset.ok='1'; taskImgSrc(im.dataset.timg).then(u=>{ if(u) im.src=u; else im.alt='photo not synced yet'; }).catch(()=>{ im.dataset.ok=''; }); }); }
@@ -949,15 +954,14 @@ async function renderVisionPane(){
   B.innerHTML=`
   <div class="vcount"><div class="c"><div class="n">${daysTo('2027-07-10')}</div><div class="k">days of runway</div></div><div class="c"><div class="n">${daysTo('2026-12-31')}</div><div class="k">days to money</div></div><div class="c"><div class="n">${prsWk}</div><div class="k">PRs this week</div></div><div class="c"><div class="n">${doneWk}</div><div class="k">tasks done this week</div></div></div>
   <div class="vblock belief"><div class="k">The core belief</div>${VISION_SEED.belief.map(l=>`<div class="l">${esc(l)}</div>`).join('')}</div>
-  ${first&&last&&first.id!==last.id?`<div class="vblock"><div class="k">Where it started · where it is</div><div class="vpair"><div data-vp="${first.id}"><img data-vsrc="${first.id}" alt=""><span>${new Date(first.taken_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}</span></div><div data-vp="${last.id}"><img data-vsrc="${last.id}" alt=""><span>${new Date(last.taken_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}</span></div></div><div class="s">Cut: 67.2 → 61.1 kg, −6.1 in 66 days. Now: 7-day scale ${avg} kg, refilling. The last row gets built, not dieted.</div></div>`:''}
-  <div class="vblock"><div class="k">The picture · end of 2026</div>${VISION_SEED.picture.map(([h,t])=>`<div class="vp"><b>${esc(h)}</b><span>${esc(t)}</span></div>`).join('')}</div>
-  <div class="vblock knot"><div class="k">When the "does it matter" thought shows up</div><div class="l">${esc(VISION_SEED.knot)}</div></div>
-  <div class="vblock"><div class="k">Your lines</div>${(V.lines||[]).map(l=>`<div class="vp mine" data-vl="${l.id}"><span>${esc(l.text)}</span></div>`).join('')||'<div class="s">Tap + Line and write the next piece of the picture, in the present tense, as if it is already true.</div>'}</div>
-  <div class="s" style="padding:6px 0 24px">Read this on the days the push is not enough. Then go do the next rep. That is what the rep is for.</div>`;
-  $('#visionAct').onclick=()=>{ modal('A line for the board', `<div class="form"><label>Present tense, already true<textarea id="vlTx" style="min-height:110px" placeholder="e.g. I train at 6 am because that is who I am."></textarea></label></div>`, [{t:'Cancel'},{t:'Add',gold:true,fn:()=>{ const v=$('#vlTx').value.trim(); if(!v) return; visionData().lines=(visionData().lines||[]).concat([{id:uid(), text:v, at:new Date().toISOString()}]); visionSave(); renderVisionPane(); }}]); setTimeout(()=>$('#vlTx').focus(),100); };
-  $$('#visionBody [data-vl]').forEach(el=>el.onclick=()=>{ const l=visionData().lines.find(x=>x.id===el.dataset.vl); if(!l) return; modal('Your line', `<div class="form"><label>Line<textarea id="vlTx" style="min-height:110px">${esc(l.text)}</textarea></label></div>`, [{t:'Delete',red:true,fn:()=>{ visionData().lines=visionData().lines.filter(x=>x.id!==l.id); visionSave(); renderVisionPane(); }},{t:'Save',gold:true,fn:()=>{ const v=$('#vlTx').value.trim(); if(v){ l.text=v; visionSave(); } renderVisionPane(); }}]); });
-  $$('#visionBody [data-vp]').forEach(el=>el.onclick=()=>photoDetail(el.dataset.vp));
-  for(const img of $$('#visionBody img[data-vsrc]')){ const src=await photoSrc(img.dataset.vsrc); if(src) img.src=src; }
+  <div class="vfeed" id="vfeed"><div class="s">Loading the board…</div></div>`;
+  const va=$('#visionAct'); if(va){ va.textContent=''; va.onclick=null; }
+  /* the board: his own images, kept in photos with note vision:NN (never shown in the physique gallery), cached on the phone after the first load */
+  try{ let ids=LS.get('visionIds', null); const fresh=api.get('photos?select=id,note&note=like.vision:*&order=note.asc').then(r=>{ LS.set('visionIds', r.map(x=>x.id)); return r.map(x=>x.id); });
+    if(!ids || !ids.length) ids=await fresh; else fresh.then(n=>{ if(JSON.stringify(n)!==JSON.stringify(ids)) renderVisionPane(); }).catch(()=>{});
+    const F=$('#vfeed'); if(!F) return; F.innerHTML=ids.map(id=>`<img data-vb="${id}" alt="" loading="lazy">`).join('')||'<div class="s">No images on the board yet.</div>';
+    for(const img of $$('#vfeed img[data-vb]')){ const id=img.dataset.vb; let src=await idbGet('v:'+id); if(!src){ src=await photoSrc(id); if(src) idbSet('v:'+id, src); } if(src){ img.src=src; img.onclick=()=>viewTaskImg(src); } }
+  }catch(e){ const F=$('#vfeed'); if(F && !F.querySelector('img')) F.innerHTML='<div class="s">Could not load the board. Open it once with a connection.</div>'; }
 }
 /* ---- health page ---- */
 const STAGE_NAMES={1:'awake',2:'asleep',3:'out of bed',4:'light',5:'deep',6:'REM',7:'awake in bed'};
@@ -1469,7 +1473,7 @@ function stackedBars(id, labels, datasets){ if(!window.Chart) return; if(charts[
 async function pagePhotos(B,T,A){
   T.textContent='Photos'; A.textContent='+ Add'; A.className='act'; A.onclick=()=>$('#photoIn').click();
   B.innerHTML='<div class="empty">Loading…</div>';
-  try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,note.not.like.task:*)&order=taken_at.desc&limit=2000'); }catch(e){ state.photosMeta = state.photosMeta||[]; }
+  try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,and(note.not.like.task:*,note.not.like.vision:*))&order=taken_at.desc&limit=2000'); }catch(e){ state.photosMeta = state.photosMeta||[]; }
   const by={}; for(const p of state.photosMeta) (by[p.date]=by[p.date]||[]).push(p);
   B.innerHTML = `<div class="empty" style="padding:0 0 14px;text-align:left">Tap <b>+ Add</b> or share pictures from the gallery. Each one lands on the day it was taken; duplicates are skipped. Tap a picture to view, swipe or use the arrows to move through the whole archive.</div>` + (Object.keys(by).sort().reverse().map(d=>`<div class="section"><h4>${new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}${by[d][0].note?' · '+esc(by[d][0].note):''}</h4><div class="photos">${by[d].map(p=>`<div class="ph" data-ph="${p.id}"><img alt="" data-src="${p.id}"><div class="d">${new Date(p.taken_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div></div>`).join('')}</div></div>`).join('') || '<div class="empty">No photos yet.</div>');
   $$('#pageBody [data-ph]').forEach(el=>el.onclick=()=>photoDetail(el.dataset.ph));

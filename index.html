@@ -165,7 +165,16 @@ header.top{flex:none}
 .pad .actions{display:flex;gap:10px;margin-top:12px}
 .pad .actions .log{flex:1;height:54px;border-radius:13px;background:var(--gold);color:var(--gold-ink);font-weight:600;font-size:17px;letter-spacing:.02em}
 .pad .actions .cancel{width:54px;height:54px;border-radius:13px;background:var(--raised);color:var(--muted);font-size:22px}
-.pad .hint{font-size:12px;color:var(--dim);margin-top:8px;min-height:16px}
+.pad .hint{font-size:12px;color:var(--dim);margin-top:6px;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pad{max-height:calc(100% - 8px);overflow-y:auto}
+.pad .actions{position:sticky;bottom:0;background:var(--surface);padding-top:8px;margin-top:6px}
+.pad .padnote{height:38px!important;margin-top:8px!important}
+.pad .partrow{margin-top:8px!important}
+.pad .rirrow{margin-top:8px!important}
+.pad .partrow .side{margin-left:auto;display:flex;gap:4px}
+.pad .partrow .side button{width:40px;height:34px;border-radius:9px;background:var(--bg2);border:1px solid var(--line);color:var(--muted);font-family:var(--mono);font-size:14px}
+.pad .partrow .side button.on{background:var(--gold);border-color:var(--gold);color:#111;font-weight:700}
+.setrow .sd{font-family:var(--mono);font-size:11px;color:var(--blue);margin-left:4px}
 .pad .hint b{color:var(--gold);font-weight:600}
 
 .fab{display:none!important;position:fixed;right:max(16px,calc(50% - 280px + 16px));bottom:calc(18px + var(--safe-b));z-index:30;width:56px;height:56px;border-radius:50%;background:var(--raised);border:1px solid var(--line2);color:var(--text);font-size:26px;display:grid;place-items:center;box-shadow:0 10px 30px rgba(0,0,0,.45)}
@@ -410,7 +419,7 @@ header.top{flex:none}
     <div class="field"><div class="flabel">Reps</div><div class="row"><button class="step" data-rstep="-1">−</button><input id="padR" type="number" inputmode="numeric" placeholder="0"><button class="step" data-rstep="1">+</button></div></div>
   </div>
   <div class="rirrow"><button class="lbl" id="rirLbl" type="button" title="Tap to switch RIR / RPE">RIR</button><div class="chips" id="rirChips"></div></div>
-  <div class="partrow"><span class="lbl">+ partials</span><button class="step" data-pstep="-1" type="button">−</button><input id="padP" type="number" inputmode="numeric" placeholder="0" min="0"><button class="step" data-pstep="1" type="button">+</button><span class="hint">half reps after failure, e.g. lateral raises</span></div>
+  <div class="partrow"><span class="lbl">+ partials</span><button class="step" data-pstep="-1" type="button">−</button><input id="padP" type="number" inputmode="numeric" placeholder="0" min="0"><button class="step" data-pstep="1" type="button">+</button><span class="side" id="padSide" hidden><button type="button" data-side="L">L</button><button type="button" data-side="R">R</button></span></div>
   <input id="padNote" class="padnote" placeholder="Note for this set (optional)" autocomplete="off" enterkeyhint="done">
   <div class="hint" id="padHint"></div>
   <div class="actions"><button class="cancel" id="padCancel">×</button><button class="log" id="padLog">Log set</button></div>
@@ -563,8 +572,10 @@ const exInfo = name => state.exercises.find(e=>e.name===name) || {name, muscle:'
 const exUnit = name => state.settings.units[name] || exInfo(name).unit || 'kg';
 function exSets(name){ return state.sets.filter(s=>s.exercise===name && s.reps>0); }
 // Halperin 2022: self-reported RIR is ~1 rep off, worse on long sets and far from failure. His threshold: over 15 reps at RIR 3+ = low-confidence effort.
+const sideOf = c => { const m=/(?:^|\s)(L|R)(?:\s|$)/.exec(c||''); return m?m[1]:null; };
+const isUni = name => { const u=(state.settings.unilateral||{})[name]; return u!=null ? !!u : /standing ham curl|single[- ]leg|single[- ]arm|one[- ]arm|one[- ]leg|unilateral/i.test(name||''); };
 const partialsOf = c => { const m=/(?:^|\s)p(\d+)(?:\s|$)/.exec(c||''); return m?+m[1]:0; };
-const mkComment = (hard, partials) => [hard?'hard?':'', partials>0?'p'+partials:''].filter(Boolean).join(' ')||null;
+const mkComment = (hard, partials, side) => [hard?'hard?':'', partials>0?'p'+partials:'', side||''].filter(Boolean).join(' ')||null;
 const lowConf = (reps, rir) => +reps>15 && rir!=null && +rir>=3;
 function exBest(name, unit, excludeId){ let best={e1:0,w:0,set:null,repsAt:{}}; for(const s of exSets(name)){ if(s.unit!==unit) continue; if(excludeId && s.id===excludeId) continue; if(lowConf(s.reps,s.rir)) continue; const w=+s.weight, r=+s.reps; const e=e1rm(w,r); if(e>best.e1 || (e===best.e1 && best.set && r>+best.set.reps)){best.e1=e;best.set=s;} if(w>best.w) best.w=w; const k=fmtW(w); if(!(k in best.repsAt)||r>best.repsAt[k]) best.repsAt[k]=r; } return best; }
 // FitNotes-style PR: e1RM best, OR heaviest weight ever, OR most reps ever at a weight lifted before.
@@ -624,7 +635,7 @@ function sessionSets(){ if(!state.session) return []; return state.sets.filter(s
 function closeSession(endAt){ if(!state.session) return; const id=state.session.workoutId; enqueue({t:'wo.update', id, body:{finished_at:endAt, note:JSON.stringify(state.session.notes||{})}}); const w=state.workouts.find(x=>x.id===id); if(w) w.finished_at=endAt; state.session=null; state.viewDay=null; persist(); }
 function sessionSheet(){
   if(!state.session) return; const ss=sessionSets(); const span=sessionSpan(); const prs=ss.filter(x=>x.is_pr).length; const ton=Math.round(ss.reduce((a,x)=>a+(+x.weight||0)*(+x.reps||0),0));
-  const live=span && (Date.now()-span.last)<SESSION_GAP; const dur=span?fmtDur(((live?Date.now():span.last)-span.start)/1000):'—';
+  const dur=span?fmtDur((span.last-span.start)/1000):'—';
   const rests=ss.map(x=>+x.rest_s).filter(r=>r>=15 && r<=600); const avgRest=rests.length?fmtDur(rests.reduce((a,b)=>a+b,0)/rests.length):'—';
   modal(`Session · ${esc(state.session.dayName||'')}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Time</div><div class="v">${dur}</div></div><div class="tile"><div class="k">Sets</div><div class="v">${ss.length}</div></div><div class="tile"><div class="k">PRs</div><div class="v">${prs}</div></div><div class="tile"><div class="k">Avg rest</div><div class="v">${avgRest}</div></div></div><div class="empty" style="text-align:left;padding:8px 0 0">${ton?ton.toLocaleString()+' tonnage · ':''}Finishing stamps the end at your last set, not at now. A gap of more than an hour finishes it on its own.</div></div>`,
     [{t:'Close'},{t:'Discard',red:true,fn:()=>{ if(!confirm('Discard the open session? Logged sets stay in history.')) return; state.session=null; state.viewDay=null; persist(); stopRest(); render(); }},{t:'Finish session',gold:true,keep:true,fn:()=>{ const endAt=ss.length?ss[ss.length-1].created_at:new Date().toISOString(); const name=state.session.dayName||''; closeSession(endAt); stopRest(); render(); sessionDone(ss, name, dur); }}]);
@@ -638,8 +649,9 @@ function sessionDone(ss, name, dur){
   modal(`Session done · ${esc(name)}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Time</div><div class="v">${dur}</div></div><div class="tile"><div class="k">Sets</div><div class="v">${ss.length}<small> ${hard} hard</small></div></div><div class="tile"><div class="k">PRs</div><div class="v" style="color:var(--gold)">${prs.length}</div></div><div class="tile"><div class="k">Tonnage</div><div class="v">${ton.toLocaleString()}</div></div></div>
     <div class="volcard" style="margin-top:12px"><div class="k">${muscles.join(' · ')}</div><div class="vchg"><b>${head}</b><span>${prs.length?'Congratulations on '+prs.length+' PR'+(prs.length>1?'s':'')+'. Every one of them is a number nobody can take back.':'No PR today — that is fine. The sets are in the book and the book is what grows.'}</span></div>${prList}</div>
     <div class="empty" style="text-align:left;padding:10px 0 0">${exList}</div></div>`, [{t:'Done',gold:true}]);
-  if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); }
+  confetti(); if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); setTimeout(confetti, 700); } else buzz('double');
 }
+function autoFinishSession(){ if(!state.session) return; const ss=sessionSets(); if(!ss.length) return; const last=new Date(ss[ss.length-1].created_at).getTime(); if(Date.now()-last < SESSION_GAP) return; const name=state.session.dayName||''; const dur=fmtDur((last-new Date(ss[0].created_at).getTime())/1000); closeSession(ss[ss.length-1].created_at); render(); if($('#modal').classList.contains('on')) return; sessionDone(ss, name, dur); }
 function sessionSpan(){ const ss=sessionSets(); if(!ss.length) return null; return {start:new Date(ss[0].created_at).getTime(), last:new Date(ss[ss.length-1].created_at).getTime()}; }
 
 /* ================= TARGETS · double progression from your last session ================= */
@@ -849,18 +861,20 @@ function pageNotes(B,T,A){
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
-    // one tap starts, one tap stops. Android's recogniser ends itself on every pause, so while the mic is "on" we restart it
-    // the moment it stops and keep appending — the pause becomes a space, not an ending.
-    let listening=false, base='', cur='', restarting=false; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
-    const startRec=async()=>{ try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ if(listening){ setL(false); toast('Voice failed: '+(e.message||e)); } } };
-    const commit=()=>{ if(cur.trim()){ base=(base?base+' ':'')+cur.trim(); cur=''; } ta.value=base; grow(); };
-    mic.onclick=async()=>{ if(listening){ setL(false); try{ await SR.stop(); }catch(e){} commit(); return; }
+    // one tap starts, one tap stops. Android's recogniser ends itself on every pause and sometimes errors ("no match", "busy");
+    // while the mic is on we always come back: commit what was heard exactly once, then restart with a growing back-off.
+    let listening=false, base='', cur='', lastCommit='', timer=null, fails=0, gen=0; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
+    const norm=x=>(x||'').trim().replace(/\s+/g,' ');
+    const commit=()=>{ const c=norm(cur); cur=''; if(c && c.toLowerCase()!==lastCommit.toLowerCase() && !norm(base).toLowerCase().endsWith(c.toLowerCase())){ base=norm((base?base+' ':'')+c); lastCommit=c; } ta.value=base; grow(); };
+    const again=()=>{ if(!listening) return; clearTimeout(timer); timer=setTimeout(startRec, Math.min(1500, 250+fails*250)); };
+    const startRec=async()=>{ if(!listening) return; const my=++gen; try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); fails=0; }catch(e){ if(my!==gen) return; fails++; commit(); if(fails>12){ setL(false); toast('Voice stopped: '+(e.message||e)); return; } again(); } };
+    mic.onclick=async()=>{ if(listening){ setL(false); clearTimeout(timer); try{ await SR.stop(); }catch(e){} commit(); return; }
       try{ const perm=await SR.requestPermissions(); if(perm && perm.speechRecognition && perm.speechRecognition!=='granted'){ toast('Microphone not allowed'); return; } }catch(e){}
-      base=ta.value.trim(); cur=''; setL(true); toast('Listening — tap ■ when you are done');
-      try{ SR.removeAllListeners && SR.removeAllListeners();
-        SR.addListener('partialResults', d=>{ cur=(d&&d.matches&&d.matches[0])||''; ta.value=(base?base+' ':'')+cur; grow(); });
-        SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ commit(); if(listening && !restarting){ restarting=true; setTimeout(()=>{ restarting=false; if(listening) startRec(); }, 250); } } });
-        await startRec(); }catch(e){ setL(false); toast('Voice failed: '+(e.message||e)); } };
+      base=norm(ta.value); cur=''; lastCommit=''; fails=0; setL(true); toast('Listening — tap ■ when you are done');
+      try{ SR.removeAllListeners && await SR.removeAllListeners(); }catch(e){}
+      SR.addListener('partialResults', d=>{ if(!listening) return; const m=norm((d&&d.matches&&d.matches[0])||''); if(!m) return; if(m.toLowerCase()===lastCommit.toLowerCase()) return; cur=m; ta.value=norm((base?base+' ':'')+cur); grow(); });
+      SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ commit(); again(); } });
+      startRec(); };
   }
   [...B.querySelectorAll('[data-tick]')].forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   [...B.querySelectorAll('[data-tid]')].forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
@@ -988,8 +1002,8 @@ function render(){
       ${slot.logged?'':`<div class="prescribe"><button class="plan" data-sets="${esc(slot.key)}" title="Adjust planned sets"><b>${planned}</b> × ${esc(slot.reps||'8-12')}</button>${volAdj(slot.key)?`<span class="over">${volAdj(slot.key)>0?'+':''}${volAdj(slot.key)} auto</span>`:''}${slot.recCut?'<span class="over" style="color:var(--red)">−1 · not recovered</span>':''}${over?`<span class="over">+${over} over plan</span>`:''}${prevOver&&!mine.length?`<button class="suggest" data-trim="${esc(slot.key)}">−${prevOver} set suggested</button>`:''}${plat?`<button class="plat" data-plat="${esc(slot.key)}">plateau · 3 sessions flat</button>`:''}${slot.note?`<span class="note">${esc(slot.note)}</span>`:''}</div>`}
       <div class="last">${best.set?`<span class="chip best">best ${fmtW(best.set.weight)}×${best.set.reps} · e1RM ${best.e1}</span>`:'<span class="chip">no history</span>'}${last.map(l=>`<span class="chip" title="${l.date}">${l.date.slice(5)}: ${l.sets.map(s=>fmtW(s.weight)+'×'+s.reps).join(' · ')}</span>`).join('')}</div>
       <div class="sets">
-        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${partialsOf(s.comment)?`<small class="pp">+${partialsOf(s.comment)}p</small>`:''}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.rir==null && isHard(s)?'<span class="ss hardtag">hard</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
-        ${!slot.logged && mine.length<planned?`<div class="setrow ghost"><div class="n">${mine.length+1}</div><div class="val ${ts?'tgt':''}">${ts?fmtW(ts.w):'—'}</div><div class="val ${ts?'tgt':''}">${ts?ts.r:'—'}</div><div class="rir">${ts?'target':'—'}</div><div></div></div>`:''}
+        ${mine.map((s,k)=>`<div class="setrow ${s.is_pr?'pr':''} ${lowConf(s.reps,s.rir)?'lc':''}" data-setid="${s.id}"><div class="n">${k+1}</div><div class="val">${fmtW(s.weight)}<small>${s.unit}</small>${s.rest_s?`<span class="rest">${fmtDur(s.rest_s)} rest</span>`:''}</div><div class="val">${s.reps}${sideOf(s.comment)?`<small class="sd">${sideOf(s.comment)}</small>`:''}${partialsOf(s.comment)?`<small class="pp">+${partialsOf(s.comment)}p</small>`:''}${ssMap[s.id]?'<span class="ss" title="superset">⇄</span>':''}${s.rir==null && isHard(s)?'<span class="ss hardtag">hard</span>':''}${s.is_pr?'<span class="prflag">PR</span>':''}</div><div class="rir ${s.rir!=null||s.rpe!=null?'set':''}">${s.rir!=null?'RIR '+s.rir:(s.rpe!=null?'RPE '+s.rpe:'—')}</div><div class="more">${s.note?'✎':'›'}</div></div>`).join('')}
+        ${!slot.logged && mine.length<planned?(()=>{ const lm=mine[mine.length-1]; const gw=lm?fmtW(lm.weight):(ts?fmtW(ts.w):'—'); const gr=lm?lm.reps:(ts?ts.r:'—'); const tag=lm?'next':(ts?'target':'—'); const cls=(!lm&&ts)?'tgt':''; return `<div class="setrow ghost"><div class="n">${mine.length+1}</div><div class="val ${cls}">${gw}</div><div class="val ${cls}">${gr}</div><div class="rir">${tag}</div><div></div></div>`; })():''}
       </div>
       <div class="addset"><button class="add" data-add="${esc(slot.key)}"><span class="plus">+</span> Log set ${mine.length+1}</button><button class="unit ${unit}" data-unit="${esc(name)}">${unit}</button></div>
     </section>`;
@@ -997,7 +1011,9 @@ function render(){
   });
   html += `<button class="addex" id="addEx"><span class="plus">+</span> Add an exercise ${today?'to today':'to '+short}</button>`;
   html += `<div class="empty" style="padding-top:0">${esc(plan.name)} · ${state.lastSync?('synced '+new Date(state.lastSync).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})):'not synced yet'}</div>`;
+  const pw=$('#paneWork'); const keepScroll = pw ? pw.scrollTop : 0;
   $('#main').innerHTML = html;
+  if(pw){ pw.scrollTop = keepScroll; }
   fitName(); centerStrip();
   const bySlot = key => slots.find(s=>s.key===key);
   $('#daySel').onchange = e => { if(e.target.value==='__rest'){ state.settings.restDays[D]=true; persist(); state.viewDay='__rest'; render(); return; } state.viewDay=e.target.value; render(); };
@@ -1155,7 +1171,7 @@ function ensureSession(day){
   if(!w){ const at=new Date(D+'T12:00:00').toISOString(); w={id:uid(), date:D, plan_id:plan.id, day_key:day.key, day_name:day.name, note:null, source:'app-backfill', started_at:at, finished_at:at}; state.workouts.unshift(w); persist(); enqueue({t:'wo.insert', row:w}); }
   return {workoutId:w.id, date:D, dayKey:w.day_key, dayName:w.day_name, planId:w.plan_id, notes:parseNotes(w)};
 }
-let pad={day:null, slot:null, name:'', unit:'kg', rir:null, rpe:null, hard:false, wStep:5, target:null, why:''};
+let pad={day:null, slot:null, name:'', unit:'kg', rir:null, rpe:null, hard:false, side:null, wStep:5, target:null, why:''};
 // ± follows the number: a whole number moves 5, a half-plate number (22.5) moves 2.5.
 const stepFor = v => { const n=+v; return (n && Math.round(n*10)%10!==0) ? 2.5 : 5; };
 function padTarget(){ const D=curDate(); const mine=daySets(D).filter(s=>s.exercise===pad.name); const t=targetFor(pad.slot,pad.name,pad.unit,D); pad.target=targetSet(t, mine.length); pad.why=t?t.why:''; }
@@ -1163,8 +1179,10 @@ function openPad(day, slot){
   if(!slot) return;
   const D=curDate(); const name=slotExercise(slot); const unit=exUnit(name);
   if(D===todayISO()){ const lastSet=sessionSets().slice(-1)[0]; const fresh=!lastSet || (Date.now()-new Date(lastSet.created_at).getTime())>=SESSION_GAP; const muscles=[...new Set(day.slots.map(x=>x.muscle))]; if(fresh && state.settings.recSkip!==D && !muscles.every(m=>recoveryFor(D,m))){ recoverySheet(day,true,()=>openPad(day,slot)); return; } }
-  pad={day, slot, name, unit, rir:null, rpe:null, hard:false, wStep:5, target:null, why:''};
-  const mine=daySets(D).filter(s=>s.exercise===name); const lastMine=mine[mine.length-1];
+  pad={day, slot, name, unit, rir:null, rpe:null, hard:false, side:null, wStep:5, target:null, why:''};
+  const mine=daySets(D).filter(s=>s.exercise===name); let lastMine=mine[mine.length-1];
+  const uni=isUni(name); const lastSide=lastMine?sideOf(lastMine.comment):null; pad.side = uni ? (lastSide==='L'?'R':'L') : null; if(uni){ const sameSide=mine.filter(x=>sideOf(x.comment)===pad.side); lastMine = sameSide[sameSide.length-1] || lastMine; }
+  const sd=$('#padSide'); sd.hidden=!uni; const paintSide=()=>$$('#padSide button').forEach(b=>b.classList.toggle('on', b.dataset.side===pad.side)); paintSide(); $$('#padSide button').forEach(b=>{ b.onpointerdown=e=>e.preventDefault(); b.onclick=()=>{ pad.side=b.dataset.side; paintSide(); const ss=mine.filter(x=>sideOf(x.comment)===pad.side); const l=ss[ss.length-1]; if(l){ $('#padW').value=fmtW(l.weight); $('#padR').value=l.reps; } }; });
   padTarget(); const ts=pad.target;
   const prev=exLastSessions(name,1,D)[0]; const prevSet=prev?prev.sets[Math.min(mine.length, prev.sets.length-1)]:null;
   $('#padWho').innerHTML=`<b>${esc(name)}</b>${D===todayISO()?'':' <span style="color:var(--gold)">· '+new Date(D+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</span>'}`; $('#padSetN').textContent='set '+(mine.length+1);
@@ -1187,7 +1205,7 @@ function renderRir(){
 function updateHint(){
   const w=+$('#padW').value, r=+$('#padR').value; const el=$('#padHint');
   const mineH=daySets(curDate()).filter(s=>s.exercise===pad.name); const lastH=mineH[mineH.length-1];
-  const tg=lastH?`<span class="tg">Last set ${fmtW(lastH.weight)} × ${lastH.reps}${lastH.rir!=null?' · RIR '+lastH.rir:''}</span>`:(pad.target?`<span class="tg">Target ${fmtW(pad.target.w)} × ${pad.target.r}</span> · ${esc(pad.why)}`:'');
+  const tg=lastH?'':(pad.target?`<span class="tg">Target ${fmtW(pad.target.w)} × ${pad.target.r}</span> · ${esc(pad.why)}`:'');
   if(!w||!r){ el.innerHTML=tg; return; }
   const kind=prKind(pad.name, pad.unit, w, r, null, pad.rir); const b=exBest(pad.name,pad.unit); const e=e1rm(w,r); let msg;
   if(lowConf(r,pad.rir)){ el.innerHTML=`${tg}${tg?' · ':''}<span style="color:var(--muted)">Over 15 reps at RIR ${pad.rir}: counts as a set, not as a strength estimate</span>`; return; }
@@ -1218,7 +1236,7 @@ $('#padLog').onclick=()=>{
   const kind=prKind(pad.name,pad.unit,w,r,null,pad.rir); const is_pr=isPR(kind);
   const now=new Date(); const rest_s=prevAny?Math.max(0,Math.round((now-new Date(prevAny.created_at))/1000)):null;
   const note=$('#padNote').value.trim()||null; const tg=pad.target;
-  const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:mkComment(pad.hard, +$('#padP').value||0), note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
+  const row={id:uid(), workout_id:sess.workoutId, date:D, exercise:pad.name, muscle:info.muscle||pad.slot.muscle, set_no:mine.length+1, weight:w, unit:pad.unit, reps:r, rir:pad.rir, rpe:pad.rpe, is_pr, comment:mkComment(pad.hard, +$('#padP').value||0, pad.side), note, rest_s, target_weight:tg?tg.w:null, target_reps:tg?tg.r:null, source:today?'app':'app-backfill', created_at:now.toISOString()};
   state.sets.push({...row,_local:true}); persist(); enqueue({t:'set.insert', row});
   if(is_pr) firePR(); else if(navigator.vibrate) navigator.vibrate(15);
   const hit = tg && w>=tg.w && r>=tg.r;
@@ -1235,7 +1253,7 @@ function setDetail(id){
   modal(`${s.exercise} · set ${s.set_no||''}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Rest before</div><div class="v">${rest!=null?fmtDur(rest):'—'}</div></div><div class="tile"><div class="k">Target</div><div class="v">${s.target_weight!=null?fmtW(s.target_weight)+'×'+s.target_reps:'—'}</div></div><div class="tile"><div class="k">e1RM</div><div class="v">${e1rm(+s.weight,+s.reps)}${s.is_pr?' <span class="prflag">PR</span>':''}</div></div></div>
     <div class="form"><div class="row"><label>Weight · ${s.unit}<input id="dW" type="number" inputmode="decimal" step="0.5" value="${fmtW(s.weight)}"></label><label>Reps<input id="dR" type="number" inputmode="numeric" value="${s.reps}"></label></div><input id="dE" type="hidden" value="${mode==='rir'?(s.rir==null?'':s.rir):(s.rpe==null?'':s.rpe)}"><input id="dH" type="hidden" value="${(s.comment||'').includes('hard?')?'1':''}"><div class="partrow" style="margin-top:8px"><span class="lbl">+ partials</span><input id="dP" type="number" inputmode="numeric" value="${partialsOf(s.comment)||''}" placeholder="0" style="width:64px;min-height:38px;text-align:center"></div><div class="rirrow" style="margin-top:8px"><div class="lbl" style="display:grid;place-items:center">${mode.toUpperCase()}</div><div class="chips" id="dChips">${(mode==='rir'?[0,1,2,3,4]:[6,7,8,9,10]).map(v=>`<button type="button" class="chip ${(mode==='rir'?s.rir:s.rpe)===v?'on':''}" data-dv="${v}">${v}</button>`).join('')}<button type="button" class="chip hardq ${(s.comment||'').includes('hard?')?'on':''}" data-dv="hard">hard?</button></div></div>
     <label>Note for this set<textarea id="dN" placeholder="Felt heavy, grip went, slow eccentric…">${esc(s.note||'')}</textarea></label></div></div>`,
-    [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this set?')) return; state.sets=state.sets.filter(x=>x.id!==id); persist(); enqueue({t:'set.delete', id}); render(); }},{t:'Save',gold:true,fn:()=>{ const w=+$('#dW').value, r=+$('#dR').value; const ev=$('#dE').value===''?null:+$('#dE').value; const body={weight:w,reps:r,note:$('#dN').value.trim()||null, comment:mkComment($('#dH').value==='1', +$('#dP').value||0)}; if(mode==='rir'){ body.rir=ev; body.rpe=ev==null?null:10-ev; } else { body.rpe=ev; body.rir=ev==null?null:10-ev; } body.is_pr=isPR(prKind(s.exercise,s.unit,w,r,id,body.rir)); Object.assign(s, body); persist(); enqueue({t:'set.update', id, body}); render(); }}]);
+    [{t:'Delete',red:true,fn:()=>{ if(!confirm('Delete this set?')) return; state.sets=state.sets.filter(x=>x.id!==id); persist(); enqueue({t:'set.delete', id}); render(); }},{t:'Save',gold:true,fn:()=>{ const w=+$('#dW').value, r=+$('#dR').value; const ev=$('#dE').value===''?null:+$('#dE').value; const body={weight:w,reps:r,note:$('#dN').value.trim()||null, comment:mkComment($('#dH').value==='1', +$('#dP').value||0, sideOf(s.comment))}; if(mode==='rir'){ body.rir=ev; body.rpe=ev==null?null:10-ev; } else { body.rpe=ev; body.rir=ev==null?null:10-ev; } body.is_pr=isPR(prKind(s.exercise,s.unit,w,r,id,body.rir)); Object.assign(s, body); persist(); enqueue({t:'set.update', id, body}); render(); }}]);
   $$('#dChips .chip').forEach(c=>c.onclick=()=>{ const v=c.dataset.dv; const E=$('#dE'), H=$('#dH'); if(v==='hard'){ const on=H.value!=='1'; H.value=on?'1':''; if(on) E.value=''; } else { const same=E.value===v; E.value=same?'':v; if(!same) H.value=''; } $$('#dChips .chip').forEach(x=>x.classList.toggle('on', x.dataset.dv==='hard'?H.value==='1':(E.value!=='' && x.dataset.dv===E.value))); });
   $$('#dW, #dR').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); });
   $$('#modal input[type=number]').forEach(i=>{ i.onfocus=()=>setTimeout(()=>i.select(),0); i.onclick=()=>i.select(); });
@@ -1296,6 +1314,8 @@ $('#pageBack').onclick=()=>closeLayer('page');
 const PAGER={idx:1, notesRendered:false};
 function renderNotesPane(){ const B=$('#notesBody'), A=$('#notesAct'); pageNotes(B, null, A); PAGER.notesRendered=true; }
 const PANE_NAMES=['notes','workout','vision'];
+(function(){ const pw=$('#paneWork'); if(!pw) return; let t=null; pw.addEventListener('scroll', ()=>{ clearTimeout(t); t=setTimeout(()=>{ LS.set('workScroll', {d:todayISO(), y:pw.scrollTop}); }, 250); }, {passive:true}); })();
+function restoreWorkScroll(){ const v=LS.get('workScroll', null); const pw=$('#paneWork'); if(v && pw && v.d===todayISO()) pw.scrollTop=v.y; }
 function goPane(i, animate){ i=Math.max(0,Math.min(2,i)); PAGER.idx=i; const t=$('#ptrack'); t.classList.toggle('drag', animate===false); t.style.transform=`translateX(${-i*33.3333}%)`; if(animate===false) requestAnimationFrame(()=>t.classList.remove('drag')); LS.set('pane', PANE_NAMES[i]); $('#chatFab').classList.toggle('hidden', i===0); if(i===0) renderNotesPane(); if(i===2) renderVisionPane(); }
 (function(){ let sx=null, sy=null, mode=null, t0=0, lastX=0, lastT=0, W=()=>innerWidth, sheetW=()=>$('#sheet').offsetWidth||300;
   const track=()=>$('#ptrack'), sheet=()=>$('#sheet'), scrim=()=>$('#scrim');
@@ -1523,8 +1543,9 @@ function slotEditor(p, di, si, done){
 function pageExercises(B,T,A){
   T.textContent='Exercises'; A.textContent='+ New'; A.className='act'; A.onclick=()=>newExerciseModal(()=>pageExercises(B,T,A));
   const groups={}; for(const e of state.exercises){ (groups[e.muscle]=groups[e.muscle]||[]).push(e); }
-  B.innerHTML=`<input id="exSearch" placeholder="Search" style="width:100%;margin-bottom:12px">`+Object.keys(groups).sort().map(m=>`<div class="section"><h4>${esc(m)}</h4><div class="list">${groups[m].sort((a,b)=>a.name.localeCompare(b.name)).map(e=>{ const b=exBest(e.name,e.unit); const n=exSets(e.name).length; const c=contribOf(e.name,e.muscle); const cs=Object.keys(c).map(k=>`${k==='Triceps'?'Tri':k==='Shoulders'?'Delts':k} ${c[k]}`).join(' · '); return `<div class="item click" data-ex="${esc(e.name)}"><div class="m"><div class="t">${esc(e.name)}</div><div class="s">${n} sets${b.set?' · best '+fmtW(b.set.weight)+'×'+b.set.reps:''} · <span data-cnt="${esc(e.name)}" style="color:var(--gold)">${cs}</span></div></div><button class="btn sm" data-tog="${esc(e.name)}" style="font-family:var(--mono)">${e.unit}</button></div>`; }).join('')}</div></div>`).join('');
-  $$('#pageBody [data-ex]').forEach(el=>el.onclick=e=>{ if(e.target.dataset.tog) return; if(e.target.dataset.cnt){ e.stopPropagation(); editContrib(e.target.dataset.cnt, ()=>pageExercises(B,T,A)); return; } openPage('exhist', el.dataset.ex); });
+  B.innerHTML=`<input id="exSearch" placeholder="Search" style="width:100%;margin-bottom:12px">`+Object.keys(groups).sort().map(m=>`<div class="section"><h4>${esc(m)}</h4><div class="list">${groups[m].sort((a,b)=>a.name.localeCompare(b.name)).map(e=>{ const b=exBest(e.name,e.unit); const n=exSets(e.name).length; const c=contribOf(e.name,e.muscle); const cs=Object.keys(c).map(k=>`${k==='Triceps'?'Tri':k==='Shoulders'?'Delts':k} ${c[k]}`).join(' · '); return `<div class="item click" data-ex="${esc(e.name)}"><div class="m"><div class="t">${esc(e.name)}</div><div class="s">${n} sets${b.set?' · best '+fmtW(b.set.weight)+'×'+b.set.reps:''} · <span data-cnt="${esc(e.name)}" style="color:var(--gold)">${cs}</span></div></div><button class="btn sm" data-uni="${esc(e.name)}" style="font-family:var(--mono);${isUni(e.name)?'color:var(--gold)':''}" title="Log left and right separately">L/R</button><button class="btn sm" data-tog="${esc(e.name)}" style="font-family:var(--mono)">${e.unit}</button></div>`; }).join('')}</div></div>`).join('');
+  $$('#pageBody [data-uni]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const n=b.dataset.uni; state.settings.unilateral=state.settings.unilateral||{}; state.settings.unilateral[n]=!isUni(n); persist(); enqueue({t:'setting.upsert', row:{key:'unilateral', value:state.settings.unilateral}}); b.style.color=isUni(n)?'var(--gold)':''; toast(isUni(n)?n+': left and right logged separately':n+': one log for both sides'); });
+  $$('#pageBody [data-ex]').forEach(el=>el.onclick=e=>{ if(e.target.dataset.tog || e.target.dataset.uni) return; if(e.target.dataset.cnt){ e.stopPropagation(); editContrib(e.target.dataset.cnt, ()=>pageExercises(B,T,A)); return; } openPage('exhist', el.dataset.ex); });
   $$('#pageBody [data-tog]').forEach(b=>b.onclick=()=>{ const e=state.exercises.find(x=>x.name===b.dataset.tog); e.unit=e.unit==='kg'?'lb':'kg'; delete state.settings.units[e.name]; persist(); enqueue({t:'ex.upsert',row:{name:e.name,muscle:e.muscle,unit:e.unit}}); b.textContent=e.unit; });
   $('#exSearch').oninput=e=>{ const q=e.target.value.toLowerCase(); $$('#pageBody [data-ex]').forEach(el=>el.style.display=el.dataset.ex.toLowerCase().includes(q)?'':'none'); };
 }
@@ -1655,7 +1676,7 @@ if(!state.plans.length) state.plans=[{id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,
 // one-time purge (2.7): mis-dated photo inserts from the old picker were still sitting in the offline queue and re-posting on every open
 if(!state.settings.purgedPhotoQueue){ const n=state.queue.length; state.queue=state.queue.filter(op=>op.t!=='photo.insert'); state.settings.purgedPhotoQueue=true; persist(); if(n!==state.queue.length) console.warn('purged queued photo inserts', n-state.queue.length); }
 if(state.session && state.session.date!==todayISO()){ // an unfinished session closes at its LAST SET, not at now
-  const id=state.session.workoutId; const ss=state.sets.filter(s=>s.workout_id===id).map(s=>s.created_at).filter(Boolean).sort(); closeSession(ss.length?ss[ss.length-1]:new Date().toISOString());
+  const id=state.session.workoutId; const ss=state.sets.filter(s=>s.workout_id===id).map(s=>s.created_at).filter(Boolean).sort(); const doneSets=state.sets.filter(s=>s.workout_id===id).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')); const nm=state.session.dayName||''; closeSession(ss.length?ss[ss.length-1]:new Date().toISOString()); if(doneSets.length) setTimeout(()=>sessionDone(doneSets, nm, fmtDur((new Date(doneSets[doneSets.length-1].created_at)-new Date(doneSets[0].created_at))/1000)), 1500);
 }
 // any device: adopt today's workout as the live session so the phone and the laptop show the same day
 if(!state.session){ const w=[...state.workouts].filter(x=>x.date===todayISO()).sort((a,b)=>(b.started_at||'').localeCompare(a.started_at||''))[0]; if(w && !w.finished_at){ let notes={}; try{ notes=w.note?JSON.parse(w.note):{}; }catch(e){} state.session={workoutId:w.id,date:w.date,dayKey:w.day_key,dayName:w.day_name,planId:w.plan_id,notes,startedAt:w.started_at}; persist(); } }
@@ -1665,8 +1686,10 @@ if(!CFG.key){
   $('#fab').classList.add('hidden'); $('#chatFab').classList.add('hidden'); setStatus('off','locked');
 } else {
   render(); setStatus(state.online?'busy':'off', state.online?'syncing':'offline'); updateChatBadge(); goPane(Math.max(0, PANE_NAMES.indexOf(LS.get('pane','notes'))), false);
-  fullSync().then(()=>{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
-  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
+  restoreWorkScroll();
+  fullSync().then(()=>{ updateChatBadge(); restoreWorkScroll(); if(PAGER.idx===0) renderNotesPane(); if(HC()) healthSync(7).catch(e=>console.warn('health sync',e)); });
+  setTimeout(autoFinishSession, 1200); setInterval(autoFinishSession, 60000);
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') autoFinishSession(); if(document.visibilityState==='visible' && HC() && Date.now()-state.health.lastSync>30*60*1000) healthSync(3).catch(()=>{}); });
 }
 if('serviceWorker' in navigator && !isNative()){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 // photos shared from the gallery (Android share sheet → IRON): the native side queues them, the page saves them as progress photos

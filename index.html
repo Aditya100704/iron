@@ -136,6 +136,7 @@ header.top{flex:none}
 
 .pad{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--line2);border-radius:18px 18px 0 0;padding:12px var(--pad) calc(14px + var(--safe-b));max-width:560px;margin:0 auto;box-shadow:0 -20px 60px rgba(0,0,0,.5);transform:translateY(105%);transition:transform .22s ease}
 .pad.open{transform:none}
+.pad.kb{top:0;bottom:auto;border-radius:0 0 18px 18px;border-top:0;border-bottom:1px solid var(--line2);padding-top:calc(12px + var(--safe-t, 0px) + env(safe-area-inset-top, 0px));box-shadow:0 20px 60px rgba(0,0,0,.6);transition:none}
 .pad .who{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;color:var(--muted)}
 .pad .who b{color:var(--text);font-weight:600}
 .pad .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -861,20 +862,17 @@ function pageNotes(B,T,A){
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
-    // one tap starts, one tap stops. Android's recogniser ends itself on every pause and sometimes errors ("no match", "busy");
-    // while the mic is on we always come back: commit what was heard exactly once, then restart with a growing back-off.
-    let listening=false, base='', cur='', lastCommit='', timer=null, fails=0, gen=0; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
+    // one utterance per tap: the recogniser stops itself at the first pause (or tap again to stop). No restart loop.
+    let listening=false, base='', cur=''; const setL=v=>{ listening=v; mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
     const norm=x=>(x||'').trim().replace(/\s+/g,' ');
-    const commit=()=>{ const c=norm(cur); cur=''; if(c && c.toLowerCase()!==lastCommit.toLowerCase() && !norm(base).toLowerCase().endsWith(c.toLowerCase())){ base=norm((base?base+' ':'')+c); lastCommit=c; } ta.value=base; grow(); };
-    const again=()=>{ if(!listening) return; clearTimeout(timer); timer=setTimeout(startRec, Math.min(1500, 250+fails*250)); };
-    const startRec=async()=>{ if(!listening) return; const my=++gen; try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); fails=0; }catch(e){ if(my!==gen) return; fails++; commit(); if(fails>12){ setL(false); toast('Voice stopped: '+(e.message||e)); return; } again(); } };
-    mic.onclick=async()=>{ if(listening){ setL(false); clearTimeout(timer); try{ await SR.stop(); }catch(e){} commit(); return; }
+    const finish=()=>{ if(!listening) return; setL(false); ta.value=norm((base?base+' ':'')+cur); cur=''; grow(); };
+    mic.onclick=async()=>{ if(listening){ try{ await SR.stop(); }catch(e){} finish(); return; }
       try{ const perm=await SR.requestPermissions(); if(perm && perm.speechRecognition && perm.speechRecognition!=='granted'){ toast('Microphone not allowed'); return; } }catch(e){}
-      base=norm(ta.value); cur=''; lastCommit=''; fails=0; setL(true); toast('Listening — tap ■ when you are done');
       try{ SR.removeAllListeners && await SR.removeAllListeners(); }catch(e){}
-      SR.addListener('partialResults', d=>{ if(!listening) return; const m=norm((d&&d.matches&&d.matches[0])||''); if(!m) return; if(m.toLowerCase()===lastCommit.toLowerCase()) return; cur=m; ta.value=norm((base?base+' ':'')+cur); grow(); });
-      SR.addListener('listeningState', d=>{ if(d && d.status==='stopped'){ commit(); again(); } });
-      startRec(); };
+      base=norm(ta.value); cur=''; setL(true);
+      SR.addListener('partialResults', d=>{ if(!listening) return; const m=norm((d&&d.matches&&d.matches[0])||''); if(!m) return; cur=m; ta.value=norm((base?base+' ':'')+cur); grow(); });
+      SR.addListener('listeningState', d=>{ if(d && d.status==='stopped') finish(); });
+      try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ finish(); } };
   }
   [...B.querySelectorAll('[data-tick]')].forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   [...B.querySelectorAll('[data-tid]')].forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
@@ -1314,6 +1312,7 @@ $('#pageBack').onclick=()=>closeLayer('page');
 const PAGER={idx:1, notesRendered:false};
 function renderNotesPane(){ const B=$('#notesBody'), A=$('#notesAct'); pageNotes(B, null, A); PAGER.notesRendered=true; }
 const PANE_NAMES=['notes','workout','vision'];
+(function(){ const P=$('#pad'); if(!P) return; let t=null; const typing=el=>el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA') && !el.readOnly; P.addEventListener('focusin', e=>{ if(typing(e.target)){ clearTimeout(t); P.classList.add('kb'); } }); P.addEventListener('focusout', ()=>{ clearTimeout(t); t=setTimeout(()=>{ if(!typing(document.activeElement) || !P.contains(document.activeElement)) P.classList.remove('kb'); }, 200); }); })();
 (function(){ const pw=$('#paneWork'); if(!pw) return; let t=null; pw.addEventListener('scroll', ()=>{ clearTimeout(t); t=setTimeout(()=>{ LS.set('workScroll', {d:todayISO(), y:pw.scrollTop}); }, 250); }, {passive:true}); })();
 function restoreWorkScroll(){ const v=LS.get('workScroll', null); const pw=$('#paneWork'); if(v && pw && v.d===todayISO()) pw.scrollTop=v.y; }
 function goPane(i, animate){ i=Math.max(0,Math.min(2,i)); PAGER.idx=i; const t=$('#ptrack'); t.classList.toggle('drag', animate===false); t.style.transform=`translateX(${-i*33.3333}%)`; if(animate===false) requestAnimationFrame(()=>t.classList.remove('drag')); LS.set('pane', PANE_NAMES[i]); $('#chatFab').classList.toggle('hidden', i===0); if(i===0) renderNotesPane(); if(i===2) renderVisionPane(); }

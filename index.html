@@ -296,6 +296,10 @@ header.top{flex:none}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
 .chatstat b{color:var(--gold)}
 .chatstat .jlink{margin-left:auto;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--text);font-family:var(--mono);font-size:12px;min-height:0}
+.vctl{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:2px}
+.vctl .sp{display:flex;gap:6px}
+.vchip{background:var(--surface);border:1px solid var(--line2);color:var(--muted);border-radius:999px;padding:8px 12px;font-family:var(--mono);font-size:12.5px}
+.vchip.on{background:var(--gold);border-color:var(--gold);color:#111;font-weight:700}
 .vtracks{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
 .vtracks .vplay{margin:0;border-color:var(--line2)}
 .vtracks .vplay.on{border-color:var(--gold)}
@@ -868,6 +872,11 @@ function loadTaskImgs(root){ [...(root||document).querySelectorAll('img[data-tim
 /* the narrations: mp3s kept in photos (note vision:audio:<key>), cached on the phone; the waking tracks advance the full-screen board, the night track plays once in the dark and stops */
 const VTRACKS=[{k:'morning', t:'Morning primer', s:'3 min · on your feet, then the first rep', slides:true},{k:'ideal', t:'The full session', s:'10 min · seated, eyes closed · afternoon or evening', slides:false},{k:'night', t:'Night — fall asleep to it', s:'11 min · barely audible · plays once, then silence', slides:false},{k:'findings', t:'What the research says', s:'10 min · the evidence behind all three', slides:false}];
 const VAUDIO={el:null, key:null, slide:-1};
+/* Loop = repeat the main part for ever (intro and outro skipped; the [loop] marks in the script, times in settings key vision_audio); speed 0.75-2x, pitch kept */
+const vLoop=()=>!!LS.get('vLoop', false), vSpeed=()=>+LS.get('vSpeed', 1)||1;
+function vMarks(k){ const m=(LS.get('vMarks', {})||{})[k]; return m && m.b>m.a ? m : null; }
+function vApply(){ const a=VAUDIO.el; if(a){ a.playbackRate=vSpeed(); try{ a.preservesPitch=true; }catch(e){} } const lb=$('#vloop'); if(lb) lb.classList.toggle('on', vLoop()); $$('[data-vs]').forEach(b=>b.classList.toggle('on', +b.dataset.vs===vSpeed())); }
+function vCtlBind(){ const lb=$('#vloop'); if(lb) lb.onclick=()=>{ LS.set('vLoop', !vLoop()); vApply(); const a=VAUDIO.el, m=vMarks(VAUDIO.key); if(vLoop() && a && m && (a.currentTime<m.a || a.currentTime>=m.b)) a.currentTime=m.a; toast(vLoop()?'Loop on: the main part repeats until you pause':'Loop off'); }; $$('[data-vs]').forEach(b=>b.onclick=()=>{ LS.set('vSpeed', +b.dataset.vs); vApply(); }); vApply(); api.get('settings?select=value&key=eq.vision_audio').then(r=>{ if(r[0] && r[0].value) LS.set('vMarks', r[0].value); }).catch(()=>{}); }
 const vfmt=x=>Math.floor(x/60)+':'+String(Math.floor(x%60)).padStart(2,'0');
 function visionPlayerPaint(){ $$('#vtracks [data-vt]').forEach(b=>{ const t=VTRACKS.find(x=>x.k===b.dataset.vt); const mine=VAUDIO.key===t.k && VAUDIO.el; const on=mine && !VAUDIO.el.paused; b.classList.toggle('on', !!on); b.querySelector('.i').textContent=on?'❚❚':'▶'; b.querySelector('small').textContent=(mine && VAUDIO.el.duration && (on||VAUDIO.el.currentTime>0))?vfmt(VAUDIO.el.currentTime)+' / '+vfmt(VAUDIO.el.duration):t.s; }); }
 function visionSlideTo(i){ const tr=document.querySelector('#vswipe.on .tr'); if(tr) tr.scrollTo({left:i*tr.clientWidth, behavior:'smooth'}); }
@@ -875,14 +884,16 @@ async function visionTrackSrc(k){ let src=await idbGet('vaudio:'+k); let id=LS.g
   try{ const r=await api.get('photos?select=id&note=eq.vision:audio:'+k); const nid=r[0]&&r[0].id; if(nid && nid!==id){ src=null; id=nid; LS.set('vaudioId:'+k, nid); } }catch(e){}
   if(!src && id){ try{ const r=await api.get('photos?select=data_b64&id=eq.'+id); if(r[0]){ src='data:audio/mpeg;base64,'+r[0].data_b64; idbSet('vaudio:'+k, src); } }catch(e){} }
   return src; }
-function visionPlayerBind(){ visionPlayerPaint(); $$('#vtracks [data-vt]').forEach(b=>b.onclick=async()=>{ const t=VTRACKS.find(x=>x.k===b.dataset.vt);
+function visionPlayerBind(){ visionPlayerPaint(); vCtlBind(); $$('#vtracks [data-vt]').forEach(b=>b.onclick=async()=>{ const t=VTRACKS.find(x=>x.k===b.dataset.vt);
   if(VAUDIO.key===t.k && VAUDIO.el){ if(VAUDIO.el.paused) VAUDIO.el.play().catch(()=>{}); else VAUDIO.el.pause(); visionPlayerPaint(); return; }
   if(VAUDIO.el){ VAUDIO.el.pause(); VAUDIO.el=null; } VAUDIO.key=t.k; VAUDIO.slide=-1; b.querySelector('small').textContent='Loading…';
   const src=await visionTrackSrc(t.k); if(!src){ VAUDIO.key=null; toast('Could not load the audio. Open it once with a connection.'); visionPlayerPaint(); return; }
   if(VAUDIO.key!==t.k) return; const a=new Audio(src); VAUDIO.el=a; if(t.k==='night') a.volume=0.6;
-  a.ontimeupdate=()=>{ visionPlayerPaint(); if(!t.slides || a.paused || !a.duration) return; const imgs=[...$$('#vfeed img[data-vb]')].filter(x=>x.src); if(!imgs.length) return; const i=Math.min(imgs.length-1, Math.floor(a.currentTime/a.duration*imgs.length)); if(i!==VAUDIO.slide){ VAUDIO.slide=i; visionSlideTo(i); } };
-  a.onended=()=>{ a.currentTime=0; VAUDIO.slide=-1; visionPlayerPaint(); }; a.onpause=visionPlayerPaint;
+  a.ontimeupdate=()=>{ const m=vMarks(t.k); if(vLoop() && m && a.currentTime>=m.b-0.15){ a.currentTime=m.a; VAUDIO.slide=-1; } visionPlayerPaint(); if(!t.slides || a.paused || !a.duration) return; const imgs=[...$$('#vfeed img[data-vb]')].filter(x=>x.src); if(!imgs.length) return; const i=Math.min(imgs.length-1, Math.floor(a.currentTime/a.duration*imgs.length)); if(i!==VAUDIO.slide){ VAUDIO.slide=i; visionSlideTo(i); } };
+  a.onended=()=>{ const m=vMarks(t.k); if(vLoop()){ a.currentTime=m?m.a:0; a.play().catch(()=>{}); return; } a.currentTime=0; VAUDIO.slide=-1; visionPlayerPaint(); }; a.onpause=visionPlayerPaint;
+  vApply(); { const m=vMarks(t.k); if(vLoop() && m){ const seek=()=>{ try{ a.currentTime=m.a; }catch(e){} }; if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true}); } }
   try{ await a.play(); }catch(e){ toast('Could not start the audio'); return; }
+  vApply();
   if(t.slides){ const imgs=[...$$('#vfeed img[data-vb]')].filter(x=>x.src).map(x=>x.src); if(imgs.length && !document.querySelector('#vswipe.on')){ VAUDIO.slide=0; viewSwipe(imgs, 0); } }
   visionPlayerPaint(); }); }
 function viewSwipe(srcs, at){ let v=$('#vswipe'); if(!v){ v=document.createElement('div'); v.id='vswipe'; v.innerHTML='<div class="tr"></div><div class="ct"></div><button class="x" aria-label="Close">✕</button>'; document.body.appendChild(v); v.querySelector('.x').onclick=()=>closeLayer('vswipe'); }
@@ -993,7 +1004,7 @@ async function renderVisionPane(){
   B.innerHTML=`
   <div class="vcount"><div class="c"><div class="n">${daysTo('2027-07-10')}</div><div class="k">days of runway</div></div><div class="c"><div class="n">${daysTo('2026-12-31')}</div><div class="k">days to money</div></div><div class="c"><div class="n">${prsWk}</div><div class="k">PRs this week</div></div><div class="c"><div class="n">${doneWk}</div><div class="k">tasks done this week</div></div></div>
   <div class="vblock belief"><div class="k">The core belief</div>${VISION_SEED.belief.map(l=>`<div class="l">${esc(l)}</div>`).join('')}</div>
-  <div class="vtracks" id="vtracks">${VTRACKS.map(t=>`<button class="vplay" data-vt="${t.k}"><span class="i">▶</span><span><b>${t.t}</b><small>${t.s}</small></span></button>`).join('')}</div>
+  <div class="vtracks" id="vtracks">${VTRACKS.map(t=>`<button class="vplay" data-vt="${t.k}"><span class="i">▶</span><span><b>${t.t}</b><small>${t.s}</small></span></button>`).join('')}<div class="vctl"><button id="vloop" class="vchip">∞ Loop</button><span class="sp">${[0.75,1,1.25,1.5,2].map(v=>`<button class="vchip" data-vs="${v}">${v}×</button>`).join('')}</span></div></div>
   <div class="vfeed" id="vfeed"><div class="s">Loading the board…</div></div>`;
   const va=$('#visionAct'); if(va){ va.textContent=''; va.onclick=null; }
   visionPlayerBind();

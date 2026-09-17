@@ -273,6 +273,15 @@ header.top{flex:none}
 .chatbar .send{width:44px;height:44px;border-radius:50%;background:var(--gold);color:#111;border:0;font-size:20px;display:grid;place-items:center;flex:none}
 .chatbar .send:disabled{opacity:.35}
 .chatbar .mic{width:44px;height:44px;border-radius:50%;background:var(--surface);color:var(--text);border:1px solid var(--line2);font-size:20px;display:grid;place-items:center;flex:none}
+.chatbar .clip{width:44px;height:44px;border-radius:50%;background:var(--surface);color:var(--text);border:1px solid var(--line2);font-size:19px;display:grid;place-items:center;flex:none}
+.chatbar{flex-wrap:wrap}
+.chatbar .att{flex-basis:100%;display:flex;align-items:center;gap:10px;padding:0 4px 2px}
+.chatbar .att img{width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid var(--line2)}
+.chatbar .att button{background:none;border:0;color:var(--dim);font-size:13px;padding:8px}
+.bub .timg{display:block;max-width:210px;max-height:240px;min-width:120px;min-height:90px;border-radius:12px;margin-bottom:6px;background:var(--bg2);object-fit:cover}
+#tview{position:fixed;inset:0;z-index:96;background:#000;display:none;place-items:center}
+#tview.on{display:grid}
+#tview img{max-width:100%;max-height:100%;object-fit:contain}
 .chatbar .mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(214,101,90,.5)}50%{box-shadow:0 0 0 10px rgba(214,101,90,0)}}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
@@ -521,7 +530,7 @@ async function fullSync(){
     const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; const local=state.tasks||{items:[]}; const lt=local.updated||0, rt=remote.updated||0; if(rt>=lt) state.tasks=remote; else enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); LS.set('tasks', state.tasks); }
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
-    try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&order=taken_at.desc&limit=2000'); }catch(e){}
+    try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,note.not.like.task:*)&order=taken_at.desc&limit=2000'); }catch(e){}
     try{ const [hd,hs]=await Promise.all([api.get('health_daily?select=*&order=date.desc&limit=90'), api.get('health_sessions?select=*&order=start_at.desc&limit=200')]); const H=state.health; hd.forEach(r=>{ H.daily[r.date]=Object.assign(H.daily[r.date]||{}, r); }); hs.forEach(r=>{ H.sessions[r.id]=r; }); LS.set('health',H); }catch(e){ console.warn('health pull',e); }
     if(plans.length) state.plans = plans; else { const p={id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true}; await api.post("plans",[p]); state.plans=[p]; }
     let all=[], from=0; const page=1000;
@@ -648,7 +657,7 @@ function sessionDone(ss, name, dur){
     <div class="empty" style="text-align:left;padding:10px 0 0">${exList}</div></div>`, [{t:'Done',gold:true}]);
   confetti(); if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); setTimeout(confetti, 700); } else buzz('double');
 }
-function autoFinishSession(){ if(!state.session) return; const ss=sessionSets(); if(!ss.length) return; const last=new Date(ss[ss.length-1].created_at).getTime(); if(Date.now()-last < SESSION_GAP) return; const name=state.session.dayName||''; const dur=fmtDur((last-new Date(ss[0].created_at).getTime())/1000); closeSession(ss[ss.length-1].created_at); render(); if($('#modal').classList.contains('on')) return; sessionDone(ss, name, dur); }
+function autoFinishSession(){ if(!state.session || (state.session.notes||{}).hold) return; // notes.hold = the coach reopened it for a manual Finish const ss=sessionSets(); if(!ss.length) return; const last=new Date(ss[ss.length-1].created_at).getTime(); if(Date.now()-last < SESSION_GAP) return; const name=state.session.dayName||''; const dur=fmtDur((last-new Date(ss[0].created_at).getTime())/1000); closeSession(ss[ss.length-1].created_at); render(); if($('#modal').classList.contains('on')) return; sessionDone(ss, name, dur); }
 function sessionSpan(){ const ss=sessionSets(); if(!ss.length) return null; return {start:new Date(ss[0].created_at).getTime(), last:new Date(ss[ss.length-1].created_at).getTime()}; }
 
 /* ================= TARGETS · double progression from your last session ================= */
@@ -829,8 +838,12 @@ function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
-function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div><div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
-function bindBubble(el, B,T,A){ const b=el.querySelector('[data-tick]'); if(b) b.onclick=()=>toggleTask(b.dataset.tick, B,T,A); el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); }; }
+function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div>${t.img?`<img class="timg" data-timg="${t.img}" alt="">`:''}<div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
+const TASK_IMG={};
+async function taskImgSrc(id){ if(TASK_IMG[id]) return TASK_IMG[id]; const r=await api.get('photos?select=data_b64,mime&id=eq.'+id); if(r && r[0] && r[0].data_b64){ TASK_IMG[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; return TASK_IMG[id]; } return null; }
+function loadTaskImgs(root){ [...(root||document).querySelectorAll('img[data-timg]')].forEach(im=>{ if(im.dataset.ok) return; im.dataset.ok='1'; taskImgSrc(im.dataset.timg).then(u=>{ if(u) im.src=u; else im.alt='photo not synced yet'; }).catch(()=>{ im.dataset.ok=''; }); }); }
+function viewTaskImg(src){ let v=$('#tview'); if(!v){ v=document.createElement('div'); v.id='tview'; v.innerHTML='<img alt="">'; document.body.appendChild(v); v.onclick=()=>closeLayer('tview'); } v.querySelector('img').src=src; v.classList.add('on'); pushLayer('tview', ()=>v.classList.remove('on')); }
+function bindBubble(el, B,T,A){ loadTaskImgs(el); const ti=el.querySelector('img[data-timg]'); if(ti) ti.onclick=e=>{ e.stopPropagation(); if(ti.src) viewTaskImg(ti.src); }; const b=el.querySelector('[data-tick]'); if(b) b.onclick=()=>toggleTask(b.dataset.tick, B,T,A); el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); }; }
 function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); } }
 function pageNotes(B,T,A){
   if(T) T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
@@ -846,15 +859,18 @@ function pageNotes(B,T,A){
     if(t.shine && t.done_at && !showOpen) html+=`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; });
   if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
   html+='</div>';
-  html+=`<div class="chatbar" id="chatbar"><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · journal …)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
+  html+=`<div class="chatbar" id="chatbar"><div class="att" id="chatAtt" hidden><img id="chatAttImg" alt=""><button id="chatAttX">Remove</button></div><button class="clip" id="chatClip" aria-label="Attach a photo">＋</button><input type="file" id="chatFile" accept="image/*" hidden><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · journal …)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
   const barAt=html.lastIndexOf('<div class="chatbar"'); html='<div class="chatscroll" id="chatScroll">'+html.slice(0,barAt)+'</div>'+html.slice(barAt);
   B.innerHTML=html;
-  const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim(); }; ta.oninput=grow;
+  const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ ta.style.height='44px'; ta.style.height=Math.min(120, ta.scrollHeight)+'px'; sb.disabled=!ta.value.trim() && !att; }; ta.oninput=grow;
   ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } }; ta.onfocus=()=>setTimeout(()=>{ const P=$('#chatScroll'); if(P) P.scrollTop=P.scrollHeight; },250);
-  let voiceSeal=()=>{};
-  const send=()=>{ voiceSeal(); const raw=ta.value.trim(); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
+  let voiceSeal=()=>{}; let att=null;
+  const send=()=>{ voiceSeal(); const raw=ta.value.trim() || (att?'Photo':''); if(!raw) return; let kind='task', text=raw; if(/^(j:|journal[:,.\-–—]?)\s*/i.test(raw)){ kind='journal'; text=raw.replace(/^(j:|journal[:,.\-–—]?)\s*/i,''); if(!text) return; } else if(/^(-|–|—|note:|n:)\s*/i.test(raw)){ kind='note'; text=raw.replace(/^(-|–|—|note:|n:)\s*/i,''); } const t={id:uid(), text, kind, created_at:new Date().toISOString(), done_at:null}; if(kind==='journal') t.journaled_at=t.created_at; if(att){ const pid=uid(); t.img=pid; TASK_IMG[pid]='data:image/jpeg;base64,'+att; savePhoto({id:pid, date:todayISO(), taken_at:t.created_at, mime:'image/jpeg', data_b64:att, note:'task:'+t.id}); clearAtt(); } tasksList().push(t); tasksSave(); ta.value=''; grow(); if(kind==='journal'){ notesStat(); toast('Filed to the journal. The coach reads it.', true); ta.focus(); return; }
     const chat=$('#chat'); if(!chat){ pageNotes(B,T,A); return; } const D2=todayISO(); const lastDayEl=[...chat.querySelectorAll('.day')].pop(); if(!lastDayEl || lastDayEl.dataset.d!==D2){ const dv=document.createElement('div'); dv.className='day'; dv.dataset.d=D2; dv.textContent='Today'; chat.appendChild(dv); } const emp=chat.querySelector('.empty'); if(emp) emp.remove();
     const wrap=document.createElement('div'); wrap.innerHTML=bubbleHTML(t); const el=wrap.firstElementChild; chat.appendChild(el); bindBubble(el,B,T,A); notesStat(); const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight; ta.focus(); };
+  const clearAtt=()=>{ att=null; $('#chatAtt').hidden=true; $('#chatFile').value=''; grow(); };
+  $('#chatClip').onclick=()=>$('#chatFile').click(); $('#chatAttX').onclick=clearAtt;
+  $('#chatFile').onchange=async e=>{ const f=e.target.files && e.target.files[0]; if(!f) return; try{ att=await shrink(f, 1280, .82); $('#chatAttImg').src='data:image/jpeg;base64,'+att; $('#chatAtt').hidden=false; grow(); }catch(err){ toast('Could not read that image'); } };
   sb.onclick=send; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal');
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
@@ -895,7 +911,7 @@ function toggleTask(id, B,T,A){
 function taskMenu(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
   modal(t.kind==='task'?'Task':'Note', `<div class="form"><label>Text<textarea id="tkTx">${esc(t.text)}</textarea></label></div>`,
-    [{t:'Delete',red:true,fn:()=>{ state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); pageNotes(B,T,A); }},{t:'Journal',fn:()=>{ t.kind='journal'; t.done_at=null; t.shine=null; t.journaled_at=new Date().toISOString(); tasksSave(); const el=$('#t-'+id); if(el){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); el.remove(); } notesStat(); toast('Filed to the journal. The coach reads it.', true); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); pageNotes(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v){ t.text=v; tasksSave(); } pageNotes(B,T,A); }}]);
+    [{t:'Delete',red:true,fn:()=>{ if(t.img) enqueue({t:'photo.delete', id:t.img}); state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); pageNotes(B,T,A); }},{t:'Journal',fn:()=>{ t.kind='journal'; t.done_at=null; t.shine=null; t.journaled_at=new Date().toISOString(); tasksSave(); const el=$('#t-'+id); if(el){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); el.remove(); } notesStat(); toast('Filed to the journal. The coach reads it.', true); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); pageNotes(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v){ t.text=v; tasksSave(); } pageNotes(B,T,A); }}]);
 }
 function pageJournal(B,T,A){
   T.textContent='Journal'; A.textContent='+ Entry'; A.className='act'; A.onclick=()=>{ modal('Journal entry', `<div class="form"><label>What is on your mind<textarea id="jTx" style="min-height:140px" placeholder="Raw. No audience."></textarea></label></div>`, [{t:'Cancel'},{t:'Save',gold:true,fn:()=>{ const v=$('#jTx').value.trim(); if(!v) return; const now=new Date().toISOString(); tasksList().push({id:uid(), text:v, kind:'journal', created_at:now, journaled_at:now, done_at:null}); tasksSave(); pageJournal(B,T,A); }}]); setTimeout(()=>$('#jTx').focus(),100); };
@@ -1312,7 +1328,7 @@ $('#scrim').onclick=()=>closeLayer('sheet');
 $$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ if(b.dataset.page==='notes'){ closeLayer('sheet'); goPane(0); return; } if(b.dataset.page==='vision'){ closeLayer('sheet'); goPane(2); return; } if(b.dataset.page==='workout'){ closeLayer('sheet'); goPane(1); return; } hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
 $('#pageBack').onclick=()=>closeLayer('page');
 const PAGER={idx:1, notesRendered:false};
-function notesSig(){ return JSON.stringify([todayISO(), !!state.settings.notesOpenOnly, tasksList().map(t=>[t.id,t.text,t.kind,t.done_at||0,t.shine||0])]); }
+function notesSig(){ return JSON.stringify([todayISO(), !!state.settings.notesOpenOnly, tasksList().map(t=>[t.id,t.text,t.kind,t.done_at||0,t.shine||0,t.img||0])]); }
 function renderNotesPane(force){ const B=$('#notesBody'), A=$('#notesAct'); const sig=notesSig();
   // only rebuild when the notes actually changed — a rebuild mid-typing wipes the draft, drops the keyboard and jumps the scroll
   if(!force && PAGER.notesRendered && PAGER.notesSig===sig && $('#chat')) return;
@@ -1446,7 +1462,7 @@ function stackedBars(id, labels, datasets){ if(!window.Chart) return; if(charts[
 async function pagePhotos(B,T,A){
   T.textContent='Photos'; A.textContent='+ Add'; A.className='act'; A.onclick=()=>$('#photoIn').click();
   B.innerHTML='<div class="empty">Loading…</div>';
-  try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&order=taken_at.desc&limit=2000'); }catch(e){ state.photosMeta = state.photosMeta||[]; }
+  try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,note.not.like.task:*)&order=taken_at.desc&limit=2000'); }catch(e){ state.photosMeta = state.photosMeta||[]; }
   const by={}; for(const p of state.photosMeta) (by[p.date]=by[p.date]||[]).push(p);
   B.innerHTML = `<div class="empty" style="padding:0 0 14px;text-align:left">Tap <b>+ Add</b> or share pictures from the gallery. Each one lands on the day it was taken; duplicates are skipped. Tap a picture to view, swipe or use the arrows to move through the whole archive.</div>` + (Object.keys(by).sort().reverse().map(d=>`<div class="section"><h4>${new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}${by[d][0].note?' · '+esc(by[d][0].note):''}</h4><div class="photos">${by[d].map(p=>`<div class="ph" data-ph="${p.id}"><img alt="" data-src="${p.id}"><div class="d">${new Date(p.taken_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div></div>`).join('')}</div></div>`).join('') || '<div class="empty">No photos yet.</div>');
   $$('#pageBody [data-ph]').forEach(el=>el.onclick=()=>photoDetail(el.dataset.ph));

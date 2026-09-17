@@ -296,6 +296,10 @@ header.top{flex:none}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
 .chatstat b{color:var(--gold)}
 .chatstat .jlink{margin-left:auto;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--text);font-family:var(--mono);font-size:12px;min-height:0}
+.vplay{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--gold);border-radius:14px;padding:14px 16px;margin:0 0 12px;color:var(--text)}
+.vplay .i{width:44px;height:44px;border-radius:50%;background:var(--gold);color:#111;display:grid;place-items:center;font-size:18px;flex:none}
+.vplay b{display:block;font-size:16px}
+.vplay small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 .vfeed{display:flex;flex-direction:column;gap:10px;padding:4px 0 28px}
 .vfeed img{width:100%;border-radius:14px;display:block;background:var(--surface);min-height:120px}
 .vcount{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 12px}
@@ -858,6 +862,20 @@ async function idbSet(k,v){ try{ const d=await idb(); d.transaction('kv','readwr
 const TASK_IMG={};
 async function taskImgSrc(id){ if(TASK_IMG[id]) return TASK_IMG[id]; const r=await api.get('photos?select=data_b64,mime&id=eq.'+id); if(r && r[0] && r[0].data_b64){ TASK_IMG[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; return TASK_IMG[id]; } return null; }
 function loadTaskImgs(root){ [...(root||document).querySelectorAll('img[data-timg]')].forEach(im=>{ if(im.dataset.ok) return; im.dataset.ok='1'; taskImgSrc(im.dataset.timg).then(u=>{ if(u) im.src=u; else im.alt='photo not synced yet'; }).catch(()=>{ im.dataset.ok=''; }); }); }
+/* the narration: one mp3 kept in photos (note vision:audio), cached on the phone; while it plays the full-screen board advances on its own */
+const VAUDIO={el:null, timer:null};
+function visionPlayerPaint(){ const b=$('#vplay'); if(!b) return; const a=VAUDIO.el; const on=a && !a.paused; b.querySelector('.i').textContent=on?'❚❚':'▶'; const s=$('#vplayS'); if(s && a && a.duration){ const f=x=>Math.floor(x/60)+':'+String(Math.floor(x%60)).padStart(2,'0'); s.textContent=on||a.currentTime>0?f(a.currentTime)+' / '+f(a.duration):'4-minute guided visualisation'; } }
+function visionSlideTo(i){ const tr=document.querySelector('#vswipe.on .tr'); if(tr) tr.scrollTo({left:i*tr.clientWidth, behavior:'smooth'}); }
+function visionPlayerBind(){ const b=$('#vplay'); if(!b) return; visionPlayerPaint(); b.onclick=async()=>{
+  if(VAUDIO.el && !VAUDIO.el.paused){ VAUDIO.el.pause(); visionPlayerPaint(); return; }
+  if(!VAUDIO.el){ const s=$('#vplayS'); if(s) s.textContent='Loading…'; let src=await idbGet('vaudio'); let id=LS.get('vaudioId', null);
+    try{ const r=await api.get('photos?select=id&note=eq.vision:audio'); const nid=r[0]&&r[0].id; if(nid && nid!==id){ src=null; id=nid; LS.set('vaudioId', nid); } }catch(e){}
+    if(!src && id){ try{ const r=await api.get('photos?select=data_b64&id=eq.'+id); if(r[0]){ src='data:audio/mpeg;base64,'+r[0].data_b64; idbSet('vaudio', src); } }catch(e){} }
+    if(!src){ toast('Could not load the audio. Open it once with a connection.'); visionPlayerPaint(); return; }
+    const a=new Audio(src); VAUDIO.el=a; a.ontimeupdate=()=>{ visionPlayerPaint(); const imgs=[...$$('#vfeed img[data-vb]')].filter(x=>x.src); if(a.duration && imgs.length && !a.paused){ const i=Math.min(imgs.length-1, Math.floor(a.currentTime/a.duration*imgs.length)); if(i!==VAUDIO.slide){ VAUDIO.slide=i; visionSlideTo(i); } } }; a.onended=()=>{ VAUDIO.slide=-1; a.currentTime=0; visionPlayerPaint(); }; a.onpause=visionPlayerPaint; }
+  try{ await VAUDIO.el.play(); }catch(e){ toast('Could not start the audio'); return; }
+  const imgs=[...$$('#vfeed img[data-vb]')].filter(x=>x.src).map(x=>x.src); if(imgs.length && !document.querySelector('#vswipe.on')){ const a=VAUDIO.el; const i=a.duration?Math.min(imgs.length-1, Math.floor(a.currentTime/a.duration*imgs.length)):0; VAUDIO.slide=i; viewSwipe(imgs, i); }
+  visionPlayerPaint(); }; }
 function viewSwipe(srcs, at){ let v=$('#vswipe'); if(!v){ v=document.createElement('div'); v.id='vswipe'; v.innerHTML='<div class="tr"></div><div class="ct"></div><button class="x" aria-label="Close">✕</button>'; document.body.appendChild(v); v.querySelector('.x').onclick=()=>closeLayer('vswipe'); }
   const tr=v.querySelector('.tr'), ct=v.querySelector('.ct'); tr.innerHTML=srcs.map(u=>`<div class="sl"><img src="${u}" alt=""></div>`).join(''); v.classList.add('on');
   const upd=()=>{ const i=Math.round(tr.scrollLeft/Math.max(1,tr.clientWidth)); ct.textContent=(i+1)+' / '+srcs.length; }; tr.onscroll=upd;
@@ -966,10 +984,12 @@ async function renderVisionPane(){
   B.innerHTML=`
   <div class="vcount"><div class="c"><div class="n">${daysTo('2027-07-10')}</div><div class="k">days of runway</div></div><div class="c"><div class="n">${daysTo('2026-12-31')}</div><div class="k">days to money</div></div><div class="c"><div class="n">${prsWk}</div><div class="k">PRs this week</div></div><div class="c"><div class="n">${doneWk}</div><div class="k">tasks done this week</div></div></div>
   <div class="vblock belief"><div class="k">The core belief</div>${VISION_SEED.belief.map(l=>`<div class="l">${esc(l)}</div>`).join('')}</div>
+  <button class="vplay" id="vplay"><span class="i">▶</span><span><b>Listen</b><small id="vplayS">4-minute guided visualisation</small></span></button>
   <div class="vfeed" id="vfeed"><div class="s">Loading the board…</div></div>`;
   const va=$('#visionAct'); if(va){ va.textContent=''; va.onclick=null; }
+  visionPlayerBind();
   /* the board: his own images, kept in photos with note vision:NN (never shown in the physique gallery), cached on the phone after the first load */
-  try{ let ids=LS.get('visionIds', null); const fresh=api.get('photos?select=id,note&note=like.vision:*&order=note.asc').then(r=>{ LS.set('visionIds', r.map(x=>x.id)); return r.map(x=>x.id); });
+  try{ let ids=LS.get('visionIds', null); const fresh=api.get('photos?select=id,note&note=like.vision:*&mime=like.image*&order=note.asc').then(r=>{ LS.set('visionIds', r.map(x=>x.id)); return r.map(x=>x.id); });
     if(!ids || !ids.length) ids=await fresh; else fresh.then(n=>{ if(JSON.stringify(n)!==JSON.stringify(ids)) renderVisionPane(); }).catch(()=>{});
     const F=$('#vfeed'); if(!F) return; F.innerHTML=ids.map(id=>`<img data-vb="${id}" alt="" loading="lazy">`).join('')||'<div class="s">No images on the board yet.</div>';
     for(const img of $$('#vfeed img[data-vb]')){ const id=img.dataset.vb; let src=await idbGet('v:'+id); if(!src){ src=await photoSrc(id); if(src) idbSet('v:'+id, src); } if(src){ img.src=src; img.onclick=()=>viewSwipe([...$$('#vfeed img[data-vb]')].filter(x=>x.src).map(x=>x.src), [...$$('#vfeed img[data-vb]')].filter(x=>x.src).indexOf(img)); } }

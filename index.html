@@ -466,6 +466,7 @@ header.top{flex:none}
     <button data-page="photos"><span class="ic">◉</span><span class="t">Photos</span><span class="s">Progress pics, one tap</span></button>
     <button data-page="exercises"><span class="ic">◇</span><span class="t">Exercises</span><span class="s">Library, units, bests</span></button>
     <button data-page="journal"><span class="ic">✍</span><span class="t">Journal</span><span class="s">Thoughts, filed for the coach</span></button>
+    <button data-page="speak"><span class="ic">♪</span><span class="t">Read aloud</span><span class="s">Paste anything, hear it in a real voice</span></button>
     <button data-page="charts"><span class="ic">▲</span><span class="t">Progress</span><span class="s">Volume, e1RM, PRs</span></button>
     <button data-page="history"><span class="ic">▤</span><span class="t">History</span><span class="s">Every session, every set</span></button>
     <button data-page="plans"><span class="ic">≡</span><span class="t">Plans</span><span class="s">Days, exercises, alternatives</span></button>
@@ -875,8 +876,8 @@ const VAUDIO={el:null, key:null, slide:-1};
 /* Loop = repeat the main part for ever (intro and outro skipped; the [loop] marks in the script, times in settings key vision_audio); speed 0.75-2x, pitch kept */
 const vLoop=()=>!!LS.get('vLoop', false), vSpeed=()=>+LS.get('vSpeed', 1)||1;
 function vMarks(k){ const m=(LS.get('vMarks', {})||{})[k]; return m && m.b>m.a ? m : null; }
-function vApply(){ const a=VAUDIO.el; if(a){ a.playbackRate=vSpeed(); try{ a.preservesPitch=true; }catch(e){} } const lb=$('#vloop'); if(lb) lb.classList.toggle('on', vLoop()); $$('[data-vs]').forEach(b=>b.classList.toggle('on', +b.dataset.vs===vSpeed())); }
-function vCtlBind(){ const lb=$('#vloop'); if(lb) lb.onclick=()=>{ LS.set('vLoop', !vLoop()); vApply(); const a=VAUDIO.el, m=vMarks(VAUDIO.key); if(vLoop() && a && m && a.currentTime>=m.b) a.currentTime=m.a; toast(vLoop()?'Loop on: full once, then the main part repeats until you pause':'Loop off'); }; $$('[data-vs]').forEach(b=>b.onclick=()=>{ LS.set('vSpeed', +b.dataset.vs); vApply(); }); vApply(); api.get('settings?select=value&key=eq.vision_audio').then(r=>{ if(r[0] && r[0].value) LS.set('vMarks', r[0].value); }).catch(()=>{}); }
+function vApply(){ const a=VAUDIO.el; if(a){ a.playbackRate=vSpeed(); try{ a.preservesPitch=true; }catch(e){} } const lb=$('#vloop'); if(lb) lb.classList.toggle('on', vLoop()); const sp=$('#vspd'); if(sp) sp.textContent=vSpeed().toFixed(2)+'×'; }
+function vCtlBind(){ const lb=$('#vloop'); if(lb) lb.onclick=()=>{ LS.set('vLoop', !vLoop()); vApply(); const a=VAUDIO.el, m=vMarks(VAUDIO.key); if(vLoop() && a && m && a.currentTime>=m.b) a.currentTime=m.a; toast(vLoop()?'Loop on: full once, then the main part repeats until you pause':'Loop off'); }; $$('[data-vstep]').forEach(b=>b.onclick=()=>{ LS.set('vSpeed', Math.min(3, Math.max(0.5, Math.round((vSpeed()+ +b.dataset.vstep)*100)/100))); vApply(); }); const sp0=$('#vspd'); if(sp0) sp0.onclick=()=>{ LS.set('vSpeed', 1); vApply(); }; vApply(); api.get('settings?select=value&key=eq.vision_audio').then(r=>{ if(r[0] && r[0].value) LS.set('vMarks', r[0].value); }).catch(()=>{}); }
 const vfmt=x=>Math.floor(x/60)+':'+String(Math.floor(x%60)).padStart(2,'0');
 function visionPlayerPaint(){ $$('#vtracks [data-vt]').forEach(b=>{ const t=VTRACKS.find(x=>x.k===b.dataset.vt); const mine=VAUDIO.key===t.k && VAUDIO.el; const on=mine && !VAUDIO.el.paused; b.classList.toggle('on', !!on); b.querySelector('.i').textContent=on?'❚❚':'▶'; b.querySelector('small').textContent=(mine && VAUDIO.el.duration && (on||VAUDIO.el.currentTime>0))?vfmt(VAUDIO.el.currentTime)+' / '+vfmt(VAUDIO.el.duration):t.s; }); }
 function visionSlideTo(i){ const tr=document.querySelector('#vswipe.on .tr'); if(tr) tr.scrollTo({left:i*tr.clientWidth, behavior:'smooth'}); }
@@ -975,6 +976,35 @@ function taskMenu(id, B,T,A){
   modal(t.kind==='task'?'Task':'Note', `<div class="form"><label>Text<textarea id="tkTx">${esc(t.text)}</textarea></label></div>`,
     [{t:'Delete',red:true,fn:()=>{ if(t.img) enqueue({t:'photo.delete', id:t.img}); state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); notesKeep(B,T,A); }},{t:'Journal',fn:()=>{ t.kind='journal'; t.done_at=null; t.shine=null; t.journaled_at=new Date().toISOString(); tasksSave(); const el=$('#t-'+id); if(el){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); el.remove(); } notesStat(); toast('Filed to the journal. The coach reads it.', true); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); notesKeep(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v){ t.text=v; tasksSave(); } notesKeep(B,T,A); }}]);
 }
+/* ---- Read aloud: Microsoft's neural voices, streamed chunk by chunk through the native IronTts plugin (nothing is saved as a file) ---- */
+const SPEAK_VOICES=[['en-US-AndrewNeural','Andrew · US, warm'],['en-US-BrianNeural','Brian · US, casual'],['en-US-ChristopherNeural','Christopher · US, deep'],['en-US-GuyNeural','Guy · US, newsreader'],['en-US-AvaNeural','Ava · US, female'],['en-US-EmmaNeural','Emma · US, female'],['en-GB-RyanNeural','Ryan · British'],['en-GB-SoniaNeural','Sonia · British, female'],['en-IN-PrabhatNeural','Prabhat · Indian'],['en-IN-NeerjaNeural','Neerja · Indian, female'],['en-AU-WilliamNeural','William · Australian']];
+const SPK={chunks:[], i:0, el:null, cache:{}, playing:false, gen:0};
+const spkSpeed=()=>+LS.get('spkSpeed', 1.2)||1, spkVoice=()=>LS.get('spkVoice','en-US-AndrewNeural');
+function spkChunks(text){ const out=[]; const paras=text.replace(/\r/g,'').split(/\n\s*\n|\n/).map(x=>x.trim()).filter(Boolean); for(const para of paras){ const sents=para.match(/[^.!?…]+[.!?…]+["')\]]*\s*|[^.!?…]+$/g)||[para]; let cur=''; for(const st of sents){ if((cur+st).length>420 && cur){ out.push(cur.trim()); cur=''; } cur+=st; while(cur.length>700){ out.push(cur.slice(0,600)); cur=cur.slice(600); } } if(cur.trim()) out.push(cur.trim()); } return out; }
+function spkStrip(t){ return t.replace(/```[\s\S]*?```/g,' ').replace(/!\[[^\]]*\]\([^)]*\)/g,' ').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/^\s*[#>]+\s*/gm,'').replace(/^\s*[-*•]\s+/gm,'').replace(/[*_`|]/g,'').replace(/https?:\/\/\S+/g,' link '); }
+async function spkFetch(i, gen){ const key=gen+':'+i; if(SPK.cache[key]) return SPK.cache[key]; const P=isNative() && Capacitor.Plugins && Capacitor.Plugins.IronTts; if(!P) throw new Error('needs the Android app'); let last; for(let a=0;a<3;a++){ try{ const r=await P.synth({text:SPK.chunks[i], voice:spkVoice(), rate:'+0%'}); SPK.cache[key]='data:audio/mpeg;base64,'+r.b64; return SPK.cache[key]; }catch(e){ last=e; await new Promise(r=>setTimeout(r, 600*(a+1))); } } throw last; }
+function spkPaint(){ const b=$('#spkPlay'); if(b) b.textContent=SPK.playing?'❚❚  Pause':(SPK.i>0 && SPK.i<SPK.chunks.length?'▶  Resume':'▶  Read it'); const st=$('#spkStat'); if(st) st.textContent=SPK.chunks.length?`${Math.min(SPK.i+1,SPK.chunks.length)} / ${SPK.chunks.length}`:''; const sp=$('#spkSpd'); if(sp) sp.textContent=spkSpeed().toFixed(2)+'×'; const cur=$('#spkNow'); if(cur) cur.textContent=SPK.playing && SPK.chunks[SPK.i]?SPK.chunks[SPK.i]:''; }
+async function spkPlayFrom(i){ const gen=SPK.gen; SPK.i=i; if(i>=SPK.chunks.length){ SPK.playing=false; SPK.i=0; spkPaint(); return; } SPK.playing=true; spkPaint();
+  let src; try{ src=await spkFetch(i, gen); }catch(e){ if(gen!==SPK.gen) return; SPK.playing=false; spkPaint(); toast('Voice service did not answer: '+(e.message||e)); return; }
+  if(gen!==SPK.gen || !SPK.playing) return; if(i+1<SPK.chunks.length) spkFetch(i+1, gen).catch(()=>{});
+  const a=new Audio(src); SPK.el=a; a.playbackRate=spkSpeed(); try{ a.preservesPitch=true; }catch(e){} a.onended=()=>{ if(gen===SPK.gen && SPK.playing){ delete SPK.cache[gen+':'+i]; spkPlayFrom(i+1); } }; try{ await a.play(); }catch(e){ SPK.playing=false; spkPaint(); } }
+function spkStop(){ SPK.gen++; SPK.playing=false; if(SPK.el){ try{ SPK.el.pause(); }catch(e){} SPK.el=null; } SPK.cache={}; SPK.i=0; spkPaint(); }
+function speakText(text){ openPage('speak'); setTimeout(()=>{ const ta=$('#spkText'); if(ta){ ta.value=text; LS.set('spkText', text); $('#spkPlay').click(); } }, 150); }
+function pageSpeak(B,T,A){ if(T) T.textContent='Read aloud'; if(A){ A.textContent='Clear'; A.className='act'; A.onclick=()=>{ spkStop(); $('#spkText').value=''; LS.set('spkText',''); }; }
+  B.innerHTML=`<div class="form"><label>Text<textarea id="spkText" style="min-height:190px" placeholder="Paste an article, a reply from the coach, notes, anything.">${esc(LS.get('spkText',''))}</textarea></label>
+  <div style="display:flex;gap:8px;margin:-4px 0 12px"><button class="btn sm" id="spkPaste">Paste from clipboard</button></div>
+  <label>Voice<select id="spkVoice">${SPEAK_VOICES.map(([v,n])=>`<option value="${v}" ${v===spkVoice()?'selected':''}>${n}</option>`).join('')}</select></label></div>
+  <div class="vctl" style="margin:6px 0 14px"><span class="s" id="spkStat"></span><span class="sp"><button class="vchip" data-sstep="-0.05">−</button><button class="vchip on" id="spkSpd">1.00×</button><button class="vchip" data-sstep="0.05">+</button></span></div>
+  <div style="display:flex;gap:8px"><button class="btn gold" id="spkPlay" style="flex:1">▶  Read it</button><button class="btn" id="spkStopB">■</button></div>
+  <div class="s" id="spkNow" style="margin-top:14px;line-height:1.5;color:var(--text)"></div>
+  <div class="s" style="margin-top:18px">${isNative()?'Free neural voices, streamed a few sentences at a time — needs a connection. Speed changes apply instantly.':'This works in the Android app (the voice service refuses web pages).'}</div>`;
+  const ta=$('#spkText'); ta.oninput=()=>LS.set('spkText', ta.value);
+  $('#spkPaste').onclick=async()=>{ try{ const t=await navigator.clipboard.readText(); if(t){ ta.value=t; LS.set('spkText', t); } else toast('Clipboard is empty'); }catch(e){ toast('Long-press in the box and paste'); } };
+  $('#spkVoice').onchange=e=>{ LS.set('spkVoice', e.target.value); const was=SPK.playing, at=SPK.i; SPK.gen++; SPK.cache={}; if(SPK.el){ try{ SPK.el.pause(); }catch(x){} } if(was) spkPlayFrom(at); };
+  $$('[data-sstep]').forEach(b=>b.onclick=()=>{ LS.set('spkSpeed', Math.min(3, Math.max(0.5, Math.round((spkSpeed()+ +b.dataset.sstep)*100)/100))); if(SPK.el) SPK.el.playbackRate=spkSpeed(); spkPaint(); }); $('#spkSpd').onclick=()=>{ LS.set('spkSpeed', 1); if(SPK.el) SPK.el.playbackRate=1; spkPaint(); };
+  $('#spkPlay').onclick=()=>{ if(SPK.playing){ SPK.playing=false; if(SPK.el) SPK.el.pause(); spkPaint(); return; } if(SPK.el && SPK.i<SPK.chunks.length && SPK.el.paused && SPK.el.currentTime>0 && !SPK.el.ended){ SPK.playing=true; SPK.el.playbackRate=spkSpeed(); SPK.el.play().catch(()=>{}); spkPaint(); return; }
+    const text=spkStrip(ta.value).trim(); if(!text){ toast('Nothing to read'); return; } spkStop(); SPK.chunks=spkChunks(text); spkPlayFrom(0); };
+  $('#spkStopB').onclick=spkStop; spkPaint(); }
 function pageJournal(B,T,A){
   T.textContent='Journal'; A.textContent='+ Entry'; A.className='act'; A.onclick=()=>{ modal('Journal entry', `<div class="form"><label>What is on your mind<textarea id="jTx" style="min-height:140px" placeholder="Raw. No audience."></textarea></label></div>`, [{t:'Cancel'},{t:'Save',gold:true,fn:()=>{ const v=$('#jTx').value.trim(); if(!v) return; const now=new Date().toISOString(); tasksList().push({id:uid(), text:v, kind:'journal', created_at:now, journaled_at:now, done_at:null}); tasksSave(); pageJournal(B,T,A); }}]); setTimeout(()=>$('#jTx').focus(),100); };
   const es=tasksList().filter(t=>t.kind==='journal').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
@@ -1004,7 +1034,7 @@ async function renderVisionPane(){
   B.innerHTML=`
   <div class="vcount"><div class="c"><div class="n">${daysTo('2027-07-10')}</div><div class="k">days of runway</div></div><div class="c"><div class="n">${daysTo('2026-12-31')}</div><div class="k">days to money</div></div><div class="c"><div class="n">${prsWk}</div><div class="k">PRs this week</div></div><div class="c"><div class="n">${doneWk}</div><div class="k">tasks done this week</div></div></div>
   <div class="vblock belief"><div class="k">The core belief</div>${VISION_SEED.belief.map(l=>`<div class="l">${esc(l)}</div>`).join('')}</div>
-  <div class="vtracks" id="vtracks">${VTRACKS.map(t=>`<button class="vplay" data-vt="${t.k}"><span class="i">▶</span><span><b>${t.t}</b><small>${t.s}</small></span></button>`).join('')}<div class="vctl"><button id="vloop" class="vchip">∞ Loop</button><span class="sp">${[0.75,1,1.25,1.5,2].map(v=>`<button class="vchip" data-vs="${v}">${v}×</button>`).join('')}</span></div></div>
+  <div class="vtracks" id="vtracks">${VTRACKS.map(t=>`<button class="vplay" data-vt="${t.k}"><span class="i">▶</span><span><b>${t.t}</b><small>${t.s}</small></span></button>`).join('')}<div class="vctl"><button id="vloop" class="vchip">∞ Loop</button><span class="sp"><button class="vchip" data-vstep="-0.05">−</button><button class="vchip on" id="vspd" title="Tap to reset to 1×">1.00×</button><button class="vchip" data-vstep="0.05">+</button></span></div></div>
   <div class="vfeed" id="vfeed"><div class="s">Loading the board…</div></div>`;
   const va=$('#visionAct'); if(va){ va.textContent=''; va.onclick=null; }
   visionPlayerBind();
@@ -1441,6 +1471,7 @@ function renderPage(kind, arg){
   else if(kind==='health') pageHealth(B,T,A);
   else if(kind==='notes') pageNotes(B,T,A);
   else if(kind==='journal') pageJournal(B,T,A);
+  else if(kind==='speak') pageSpeak(B,T,A);
   else if(kind==='diet') pageDiet(B,T,A);
   else if(kind==='coach') pageCoach(B,T,A);
   else if(kind==='plans') pagePlans(B,T,A);
@@ -1784,8 +1815,9 @@ function shareChooser(){
   const n=SHARE_HOLD.length; if(!n) return; const texts=SHARE_HOLD.filter(x=>x.text).length, imgs=n-texts;
   const what=[imgs?imgs+' photo'+(imgs>1?'s':''):'', texts?texts+' text':''].filter(Boolean).join(' + ');
   modal('Shared to IRON', `<div class="empty" style="text-align:left;padding:0 0 10px">${what}. Where does it go?</div><div class="form"><label>Message for the coach (optional)<input id="shNote" placeholder="e.g. what do you think of this"></label></div>`,
-    [{t:'Cancel',fn:()=>{ SHARE_HOLD=[]; }},{t:'Physique log',fn:()=>{ const items=SHARE_HOLD.filter(x=>!x.text); SHARE_HOLD=[]; savePhysique(items); }},{t:'To the coach',gold:true,fn:async()=>{ const note=$('#shNote').value.trim()||null; const items=SHARE_HOLD; SHARE_HOLD=[]; let ok=0; for(const it of items){ const row=it.text?{kind:'text', text:it.text, note}:{kind:'image', mime:'image/jpeg', data_b64:it.b64, note}; try{ await api.post('inbox',[row]); ok++; }catch(e){ console.warn('inbox',e); } } toast(ok?`Sent to the coach (${ok}). Only the coach sees it.`:'Could not send', true); }}]);
+    [{t:'Cancel',fn:()=>{ SHARE_HOLD=[]; }},{t:'Read aloud',fn:()=>{ const tx=SHARE_HOLD.filter(x=>x.text).map(x=>x.text).join('\n\n'); SHARE_HOLD=[]; if(tx) speakText(tx); }},{t:'Physique log',fn:()=>{ const items=SHARE_HOLD.filter(x=>!x.text); SHARE_HOLD=[]; savePhysique(items); }},{t:'To the coach',gold:true,fn:async()=>{ const note=$('#shNote').value.trim()||null; const items=SHARE_HOLD; SHARE_HOLD=[]; let ok=0; for(const it of items){ const row=it.text?{kind:'text', text:it.text, note}:{kind:'image', mime:'image/jpeg', data_b64:it.b64, note}; try{ await api.post('inbox',[row]); ok++; }catch(e){ console.warn('inbox',e); } } toast(ok?`Sent to the coach (${ok}). Only the coach sees it.`:'Could not send', true); }}]);
   if(imgs===0){ const b=[...$$('#modalActs button')].find(x=>x.textContent==='Physique log'); if(b) b.style.display='none'; }
+  if(texts===0){ const b=[...$$('#modalActs button')].find(x=>x.textContent==='Read aloud'); if(b) b.style.display='none'; }
 }
 async function savePhysique(imgs){ const D=todayISO(); let added=0, dup=0, dayDup=0; const dates=new Set();
   const have=(state.photosMeta||[]).map(m=>new Date(m.taken_at).getTime()); const noTimeDates=new Set((state.photosMeta||[]).filter(m=>(m.note||'').includes('time unknown')).map(m=>m.date));

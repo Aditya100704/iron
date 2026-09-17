@@ -280,6 +280,14 @@ header.top{flex:none}
 .chatbar .att img{width:54px;height:54px;object-fit:cover;border-radius:10px;border:1px solid var(--line2)}
 .chatbar .att button{background:none;border:0;color:var(--dim);font-size:13px;padding:8px}
 .bub .timg{display:block;max-width:210px;max-height:240px;min-width:120px;min-height:90px;border-radius:12px;margin-bottom:6px;background:var(--bg2);object-fit:cover}
+#vswipe{position:fixed;inset:0;z-index:96;background:#000;display:none}
+#vswipe.on{display:block}
+#vswipe .tr{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior:contain}
+#vswipe .tr::-webkit-scrollbar{display:none}
+#vswipe .sl{flex:0 0 100%;height:100%;display:grid;place-items:center;scroll-snap-align:center;scroll-snap-stop:always}
+#vswipe .sl img{max-width:100%;max-height:100%;object-fit:contain}
+#vswipe .ct{position:absolute;left:0;right:0;bottom:calc(18px + var(--safe-b));text-align:center;color:#fff;opacity:.7;font-family:var(--mono);font-size:12px;pointer-events:none}
+#vswipe .x{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;border:0;font-size:16px}
 #tview{position:fixed;inset:0;z-index:96;background:#000;display:none;place-items:center}
 #tview.on{display:grid}
 #tview img{max-width:100%;max-height:100%;object-fit:contain}
@@ -850,6 +858,10 @@ async function idbSet(k,v){ try{ const d=await idb(); d.transaction('kv','readwr
 const TASK_IMG={};
 async function taskImgSrc(id){ if(TASK_IMG[id]) return TASK_IMG[id]; const r=await api.get('photos?select=data_b64,mime&id=eq.'+id); if(r && r[0] && r[0].data_b64){ TASK_IMG[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; return TASK_IMG[id]; } return null; }
 function loadTaskImgs(root){ [...(root||document).querySelectorAll('img[data-timg]')].forEach(im=>{ if(im.dataset.ok) return; im.dataset.ok='1'; taskImgSrc(im.dataset.timg).then(u=>{ if(u) im.src=u; else im.alt='photo not synced yet'; }).catch(()=>{ im.dataset.ok=''; }); }); }
+function viewSwipe(srcs, at){ let v=$('#vswipe'); if(!v){ v=document.createElement('div'); v.id='vswipe'; v.innerHTML='<div class="tr"></div><div class="ct"></div><button class="x" aria-label="Close">✕</button>'; document.body.appendChild(v); v.querySelector('.x').onclick=()=>closeLayer('vswipe'); }
+  const tr=v.querySelector('.tr'), ct=v.querySelector('.ct'); tr.innerHTML=srcs.map(u=>`<div class="sl"><img src="${u}" alt=""></div>`).join(''); v.classList.add('on');
+  const upd=()=>{ const i=Math.round(tr.scrollLeft/Math.max(1,tr.clientWidth)); ct.textContent=(i+1)+' / '+srcs.length; }; tr.onscroll=upd;
+  requestAnimationFrame(()=>{ tr.scrollLeft=Math.max(0,at)*tr.clientWidth; upd(); }); pushLayer('vswipe', ()=>{ v.classList.remove('on'); tr.innerHTML=''; }); }
 function viewTaskImg(src){ let v=$('#tview'); if(!v){ v=document.createElement('div'); v.id='tview'; v.innerHTML='<img alt="">'; document.body.appendChild(v); v.onclick=()=>closeLayer('tview'); } v.querySelector('img').src=src; v.classList.add('on'); pushLayer('tview', ()=>v.classList.remove('on')); }
 function bindBubble(el, B,T,A){ loadTaskImgs(el); const ti=el.querySelector('img[data-timg]'); if(ti) ti.onclick=e=>{ e.stopPropagation(); if(ti.src) viewTaskImg(ti.src); }; const b=el.querySelector('[data-tick]'); if(b) b.onclick=()=>toggleTask(b.dataset.tick, B,T,A); el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); }; }
 function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); } }
@@ -960,7 +972,7 @@ async function renderVisionPane(){
   try{ let ids=LS.get('visionIds', null); const fresh=api.get('photos?select=id,note&note=like.vision:*&order=note.asc').then(r=>{ LS.set('visionIds', r.map(x=>x.id)); return r.map(x=>x.id); });
     if(!ids || !ids.length) ids=await fresh; else fresh.then(n=>{ if(JSON.stringify(n)!==JSON.stringify(ids)) renderVisionPane(); }).catch(()=>{});
     const F=$('#vfeed'); if(!F) return; F.innerHTML=ids.map(id=>`<img data-vb="${id}" alt="" loading="lazy">`).join('')||'<div class="s">No images on the board yet.</div>';
-    for(const img of $$('#vfeed img[data-vb]')){ const id=img.dataset.vb; let src=await idbGet('v:'+id); if(!src){ src=await photoSrc(id); if(src) idbSet('v:'+id, src); } if(src){ img.src=src; img.onclick=()=>viewTaskImg(src); } }
+    for(const img of $$('#vfeed img[data-vb]')){ const id=img.dataset.vb; let src=await idbGet('v:'+id); if(!src){ src=await photoSrc(id); if(src) idbSet('v:'+id, src); } if(src){ img.src=src; img.onclick=()=>viewSwipe([...$$('#vfeed img[data-vb]')].filter(x=>x.src).map(x=>x.src), [...$$('#vfeed img[data-vb]')].filter(x=>x.src).indexOf(img)); } }
   }catch(e){ const F=$('#vfeed'); if(F && !F.querySelector('img')) F.innerHTML='<div class="s">Could not load the board. Open it once with a connection.</div>'; }
 }
 /* ---- health page ---- */
@@ -1353,7 +1365,7 @@ function restoreWorkScroll(){ const v=LS.get('workScroll', null); const pw=$('#p
 function goPane(i, animate){ i=Math.max(0,Math.min(2,i)); PAGER.idx=i; const t=$('#ptrack'); t.classList.toggle('drag', animate===false); t.style.transform=`translateX(${-i*33.3333}%)`; if(animate===false) requestAnimationFrame(()=>t.classList.remove('drag')); LS.set('pane', PANE_NAMES[i]); $('#chatFab').classList.toggle('hidden', i===0); if(i===0) renderNotesPane(); if(i===2) renderVisionPane(); }
 (function(){ let sx=null, sy=null, mode=null, t0=0, lastX=0, lastT=0, W=()=>innerWidth, sheetW=()=>$('#sheet').offsetWidth||300;
   const track=()=>$('#ptrack'), sheet=()=>$('#sheet'), scrim=()=>$('#scrim');
-  const busy=()=>$('#page').classList.contains('open') || $('#pad').classList.contains('open') || $('#modal').classList.contains('on') || $('#gal').classList.contains('on');
+  const busy=()=>$('#page').classList.contains('open') || $('#pad').classList.contains('open') || $('#modal').classList.contains('on') || $('#gal').classList.contains('on') || !!document.querySelector('#vswipe.on, #tview.on');
   document.addEventListener('touchstart', e=>{ mode=null; if(!CFG.key || e.touches.length!==1 || busy()) return; if(e.target.closest('.datestrip, .last, .segs, .chips, .meters, .pin, select, input, textarea, .chatbar')) return; const t=e.touches[0]; sx=t.clientX; sy=t.clientY; t0=Date.now(); lastX=sx; lastT=t0; mode='pending'; }, {passive:true});
   document.addEventListener('touchmove', e=>{ if(!mode || mode==='off') return; const t=e.touches[0]; const dx=t.clientX-sx, dy=t.clientY-sy; lastX=t.clientX; lastT=Date.now();
     if(mode==='pending'){ if(Math.abs(dy)>10 && Math.abs(dy)>Math.abs(dx)){ mode='off'; return; } if(Math.abs(dx)<12) return; mode = sheet().classList.contains('open') ? 'drawer' : 'pane'; track().classList.add('drag'); sheet().style.transition='none'; scrim().style.transition='none'; }

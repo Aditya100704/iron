@@ -657,7 +657,7 @@ function sessionDone(ss, name, dur){
     <div class="empty" style="text-align:left;padding:10px 0 0">${exList}</div></div>`, [{t:'Done',gold:true}]);
   confetti(); if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); setTimeout(confetti, 700); } else buzz('double');
 }
-function autoFinishSession(){ if(!state.session || (state.session.notes||{}).hold) return; // notes.hold = the coach reopened it for a manual Finish const ss=sessionSets(); if(!ss.length) return; const last=new Date(ss[ss.length-1].created_at).getTime(); if(Date.now()-last < SESSION_GAP) return; const name=state.session.dayName||''; const dur=fmtDur((last-new Date(ss[0].created_at).getTime())/1000); closeSession(ss[ss.length-1].created_at); render(); if($('#modal').classList.contains('on')) return; sessionDone(ss, name, dur); }
+function autoFinishSession(){ if(!state.session || (state.session.notes||{}).hold) return; /* notes.hold = the coach reopened it for a manual Finish */ const ss=sessionSets(); if(!ss.length) return; const last=new Date(ss[ss.length-1].created_at).getTime(); if(Date.now()-last < SESSION_GAP) return; const name=state.session.dayName||''; const dur=fmtDur((last-new Date(ss[0].created_at).getTime())/1000); closeSession(ss[ss.length-1].created_at); render(); if($('#modal').classList.contains('on')) return; sessionDone(ss, name, dur); }
 function sessionSpan(){ const ss=sessionSets(); if(!ss.length) return null; return {start:new Date(ss[0].created_at).getTime(), last:new Date(ss[ss.length-1].created_at).getTime()}; }
 
 /* ================= TARGETS · double progression from your last session ================= */

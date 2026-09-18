@@ -166,7 +166,7 @@ header.top{flex:none}
 .pad .actions{display:flex;gap:10px;margin-top:12px}
 .pad .actions .log{flex:1;height:54px;border-radius:13px;background:var(--gold);color:var(--gold-ink);font-weight:600;font-size:17px;letter-spacing:.02em}
 .pad .actions .cancel{width:54px;height:54px;border-radius:13px;background:var(--raised);color:var(--muted);font-size:22px}
-.pad .hint{font-size:12px;color:var(--dim);margin-top:6px;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pad .hint{display:none;font-size:12px;color:var(--dim);margin-top:6px;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pad{max-height:calc(100% - 8px);overflow-y:auto}
 .pad .actions{position:sticky;bottom:0;background:var(--surface);padding-top:8px;margin-top:6px}
 .pad .padnote{height:38px!important;margin-top:8px!important}
@@ -789,7 +789,7 @@ function deloadSuggested(){
 /* ================= HOME CARDS ================= */
 function metersRow(D){
   const f=focusOf(activePlan()); const ms=Object.keys(f).slice(0,4); if(!ms.length) return ''; const wk=weekStartISO(D);
-  return `<button class="meters" id="meters" aria-label="Weekly volume">${ms.map(m=>{ const n=hardSetsWeek(m,wk); const t=f[m]; return `<span class="m"><span class="l"><span>${esc(m==='Triceps'?'Tri':m)}</span><span class="num">${fmtN(n)}/${t}</span></span><span class="bar"><i style="width:${Math.min(100,Math.round(100*n/t))}%"></i></span></span>`; }).join('')}</button>`;
+  return `<button class="meters" id="meters" aria-label="Weekly volume">${ms.map(m=>{ const n=hardSetsWeek(m,wk); const t=f[m]; return `<span class="m" data-mm="${esc(m)}"><span class="l"><span>${esc(m==='Triceps'?'Tri':m)}</span><span class="num">${fmtN(n)}/${t}</span></span><span class="bar"><i style="width:${Math.min(100,Math.round(100*n/t))}%"></i></span></span>`; }).join('')}</button>`;
 }
 function coachCard(){ const n=(state.notes||[]).find(x=>!x.read_at); if(!n) return ''; return `<div class="coachcard"><div class="k">Coach · ${new Date(n.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div><div class="t">${esc(n.title)}</div><div class="b" id="coachBody">${esc(n.body).replace(/\n/g,'<br>')}</div><div class="acts"><button class="btn sm" id="coachMore">Read all</button><button class="btn sm gold" data-noteread="${n.id}">Got it</button></div></div>`; }
 function volumeCard(){ const V=state.volume||{}; const wk=weekStartISO(); const ch=(V.log||[]).filter(c=>c.week===wk && !c.undone); if(!ch.length || state.settings.volSeen[wk]) return ''; return `<div class="volcard"><div class="k">Volume · this week</div>${ch.map(c=>`<div class="vchg"><b>${esc(c.muscle)} ${c.delta>0?'+':''}${c.delta} set</b><span>${esc(c.why)}</span><button class="btn sm" data-undo="${c.id}">Undo</button></div>`).join('')}<div class="acts"><button class="btn sm gold" id="volOk">OK</button></div></div>`; }
@@ -1137,7 +1137,7 @@ function render(){
   $$('[data-plat]').forEach(b=>b.onclick=()=>platSheet(bySlot(b.dataset.plat), day));
   $('#addEx').onclick=()=>addExerciseSheet(day);
   const rb=$('#recBtn'); if(rb) rb.onclick=()=>recoverySheet(day,false);
-  const mt=$('#meters'); if(mt) mt.onclick=()=>openPage('volume');
+  const mt=$('#meters'); if(mt) mt.onclick=e=>{ const m=e.target.closest('[data-mm]'); if(m) openPage('muscle', m.dataset.mm); else openPage('volume'); };
   const cm=$('#coachMore'); if(cm) cm.onclick=()=>{ $('#coachBody').classList.add('full'); cm.remove(); };
   $$('[data-noteread]').forEach(b=>b.onclick=()=>{ const n=state.notes.find(x=>x.id===b.dataset.noteread); if(n){ n.read_at=new Date().toISOString(); persist(); enqueue({t:'note.read', id:n.id, at:n.read_at}); } render(); });
   $$('#main [data-undo]').forEach(b=>b.onclick=()=>{ undoVolume(b.dataset.undo); toast('Undone'); render(); });
@@ -1166,7 +1166,7 @@ function renderRest(D, today, days){
   $('#restUndo').onclick = () => { delete state.settings.restDays[D]; persist(); state.viewDay=null; render(); };
   const rh=$('#restHist'); if(rh) rh.onclick=e=>{ e.preventDefault(); openPage('workout', D); };
   $$('#dateStrip [data-date]').forEach(b=>b.onclick=()=>goDate(b.dataset.date));
-  const mt=$('#meters'); if(mt) mt.onclick=()=>openPage('volume');
+  const mt=$('#meters'); if(mt) mt.onclick=e=>{ const m=e.target.closest('[data-mm]'); if(m) openPage('muscle', m.dataset.mm); else openPage('volume'); };
   const cm=$('#coachMore'); if(cm) cm.onclick=()=>{ $('#coachBody').classList.add('full'); cm.remove(); };
   $$('[data-noteread]').forEach(b=>b.onclick=()=>{ const n=state.notes.find(x=>x.id===b.dataset.noteread); if(n){ n.read_at=new Date().toISOString(); persist(); enqueue({t:'note.read', id:n.id, at:n.read_at}); } render(); });
   $$('#main [data-undo]').forEach(b=>b.onclick=()=>{ undoVolume(b.dataset.undo); toast('Undone'); render(); });
@@ -1314,7 +1314,7 @@ function renderRir(){
 function updateHint(){
   const w=+$('#padW').value, r=+$('#padR').value; const el=$('#padHint');
   const mineH=daySets(curDate()).filter(s=>s.exercise===pad.name); const lastH=mineH[mineH.length-1];
-  const tg=lastH?'':(pad.target?`<span class="tg">Target ${fmtW(pad.target.w)} × ${pad.target.r}</span> · ${esc(pad.why)}`:'');
+  const tg=''; /* the text strip above Log set is gone (his order 2026-09-18, 'repetitive'): no target, no e1RM, no PR line in the pad */
   if(!w||!r){ el.innerHTML=tg; return; }
   const kind=prKind(pad.name, pad.unit, w, r, null, pad.rir); const b=exBest(pad.name,pad.unit); const e=e1rm(w,r); let msg;
   if(lowConf(r,pad.rir)){ el.innerHTML=`${tg}${tg?' · ':''}<span style="color:var(--muted)">Over 15 reps at RIR ${pad.rir}: counts as a set, not as a strength estimate</span>`; return; }
@@ -1465,6 +1465,7 @@ function openPage(kind, arg, replace){
 function renderPage(kind, arg){
   const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden'; $('#chatFab').classList.add('hidden');
   if(kind==='history') pageHistory(B,T,A);
+  else if(kind==='muscle') pageMuscle(B,T,A,arg);
   else if(kind==='charts') pageCharts(B,T,A);
   else if(kind==='photos') pagePhotos(B,T,A);
   else if(kind==='volume') pageVolume(B,T,A);
@@ -1717,6 +1718,31 @@ function customFood(D, B,T,A){
 }
 
 /* ---- volume · specialization ---- */
+/* ---- one muscle: this week's volume set by set, then every past week ---- */
+function muscleWeek(muscle, wk){ const end=addDaysISO(wk,7); const rows=[]; for(const s of state.sets){ if(s.date<wk || s.date>=end || !(+s.reps>0)) continue; const w=contribOf(s.exercise, s.muscle)[muscle]; if(!w) continue; rows.push({s, w, hard:isHard(s)}); } rows.sort((a,b)=>(a.s.created_at||a.s.date).localeCompare(b.s.created_at||b.s.date)); return rows; }
+function pageMuscle(B,T,A,muscle){
+  T.textContent=muscle; const plan=activePlan(); const f=focusOf(plan); const target=f[muscle]||null; const wk=weekStartISO();
+  A.textContent='All muscles'; A.className='act'; A.onclick=()=>openPage('volume');
+  const dfmt=d=>new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+  const IDX={}; for(const s0 of state.sets){ if(!(+s0.reps>0)) continue; const w0=contribOf(s0.exercise, s0.muscle)[muscle]; if(!w0) continue; const k=weekStartISO(s0.date); (IDX[k]=IDX[k]||[]).push({s:s0, w:w0, hard:isHard(s0)}); } for(const k in IDX) IDX[k].sort((a,b)=>(a.s.created_at||a.s.date).localeCompare(b.s.created_at||b.s.date)); const weekRows=w=>IDX[w]||[];
+  const rows=weekRows(wk); const hard=rows.filter(r=>r.hard); const total=Math.round(hard.reduce((a,r)=>a+r.w,0)*10)/10; const direct=hard.filter(r=>r.w>=1).length; const indirect=Math.round(hard.filter(r=>r.w<1).reduce((a,r)=>a+r.w,0)*10)/10; const easy=rows.length-hard.length;
+  const byEx={}; for(const r of rows){ const k=r.s.exercise; const o=byEx[k]=byEx[k]||{n:0,hard:0,vol:0,w:r.w,best:null}; o.n++; if(r.hard){ o.hard++; o.vol+=r.w; } if(!o.best || e1rm(r.s.weight,r.s.reps)>e1rm(o.best.weight,o.best.reps)) o.best=r.s; }
+  const byDay={}; for(const r of rows){ (byDay[r.s.date]=byDay[r.s.date]||[]).push(r); }
+  // every week that has a set for this muscle, newest first
+  const firstWk=Object.keys(IDX).sort()[0]||wk; const weeks=[]; for(let w=wk; w>=firstWk; w=addDaysISO(w,-7)){ weeks.push(w); if(weeks.length>520) break; }
+  const hist=weeks.map(w=>{ const rr=weekRows(w); const hh=rr.filter(r=>r.hard); const tot=Math.round(hh.reduce((a,r)=>a+r.w,0)*10)/10; const ex={}; hh.forEach(r=>{ ex[r.s.exercise]=(ex[r.s.exercise]||0)+r.w; }); return {w, tot, n:rr.length, days:new Set(rr.map(r=>r.s.date)).size, ex:Object.entries(ex).sort((a,b)=>b[1]-a[1])}; });
+  const maxTot=Math.max(target||0, ...hist.map(h=>h.tot), 1); const past=hist.slice(1).filter(h=>h.n); const avg4=past.slice(0,4).length?Math.round(past.slice(0,4).reduce((a,h)=>a+h.tot,0)/past.slice(0,4).length*10)/10:null; const best=past.reduce((m,h)=>h.tot>(m?m.tot:-1)?h:m, null);
+  const setLine=r=>{ const s=r.s; return `<div class="setrow" style="grid-template-columns:1fr auto auto auto;gap:10px"><div style="text-align:left;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.exercise)}</div><div class="val">${fmtW(s.weight)}<small style="color:var(--dim)"> ${esc(s.unit||'')}</small> × ${s.reps}</div><div class="rir">${s.rir!=null?'RIR '+s.rir:((s.comment||'').includes('hard?')?'hard?':'—')}</div><div class="rir" style="color:${r.hard?'var(--gold)':'var(--dim)'}">${r.hard?'+'+fmtN(r.w):'easy'}</div></div>`; };
+  B.innerHTML=`
+  <div class="vcount" style="grid-template-columns:repeat(3,1fr)"><div class="c"><div class="n">${fmtN(total)}${target?`<small style="font-size:14px;color:var(--muted)">/${target}</small>`:''}</div><div class="k">hard sets this week</div></div><div class="c"><div class="n">${avg4!=null?fmtN(avg4):'—'}</div><div class="k">avg of last 4 weeks</div></div><div class="c"><div class="n">${best?fmtN(best.tot):'—'}</div><div class="k">best week</div></div></div>
+  <div class="empty" style="text-align:left;padding:0 0 12px">${direct} direct hard set${direct===1?'':'s'}${indirect?` + ${fmtN(indirect)} from indirect work (0.5 each)`:''}${easy?` · ${easy} set${easy===1?'':'s'} too easy to count`:''}${target?(total>=target?' · target hit.':` · ${fmtN(Math.round((target-total)*10)/10)} to go.`):''}</div>
+  <div class="card" style="padding:14px"><div class="k" style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">This week by exercise</div>${Object.entries(byEx).sort((a,b)=>b[1].vol-a[1].vol).map(([n,o])=>`<div class="last" data-mex="${esc(n)}" style="display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line)"><span style="text-align:left"><b style="font-weight:600">${esc(n)}</b><small style="display:block;color:var(--muted);margin-top:2px">${o.w>=1?'direct':'indirect ×'+o.w} · ${o.hard}/${o.n} hard${o.best?` · best ${fmtW(o.best.weight)} × ${o.best.reps}`:''}</small></span><span style="font-family:var(--mono);color:var(--gold)">+${fmtN(Math.round(o.vol*10)/10)}</span></div>`).join('')||'<div class="s">Nothing logged for this muscle this week.</div>'}</div>
+  ${Object.keys(byDay).sort().map(d=>`<div class="card" style="padding:14px"><div class="k" style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${dfmt(d)} · +${fmtN(Math.round(byDay[d].filter(r=>r.hard).reduce((a,r)=>a+r.w,0)*10)/10)}</div>${byDay[d].map(setLine).join('')}</div>`).join('')}
+  <div class="card" style="padding:14px"><div class="k" style="font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Every week · hard sets</div>${hist.map((h,i)=>`<div data-mwk="${h.w}" style="padding:8px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;font-size:13px"><span>${i===0?'This week':new Date(h.w+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}<small style="color:var(--dim)"> · ${h.days} day${h.days===1?'':'s'} · ${h.n} sets</small></span><span style="font-family:var(--mono);color:${target&&h.tot>=target?'var(--gold)':'var(--text)'}">${fmtN(h.tot)}</span></div><div class="bar" style="height:6px;border-radius:3px;background:var(--bg2);margin-top:6px;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(100*h.tot/maxTot)}%;background:${target&&h.tot>=target?'var(--gold)':'var(--blue)'}"></i></div><div class="mwx" hidden style="margin-top:8px"></div></div>`).join('')}</div>
+  <div class="s" style="padding:4px 0 24px">Tap a week to see its sets. Tap an exercise for its full history. Pre-IRON history (FitNotes) is counted with the same rules; with no RIR logged a set counts as hard when it is within 90% of your best on that lift in the 8 weeks before it.</div>`;
+  $$('#pageBody [data-mex]').forEach(el=>el.onclick=()=>openPage('exhist', el.dataset.mex));
+  $$('#pageBody [data-mwk]').forEach(el=>el.onclick=()=>{ const box=el.querySelector('.mwx'); if(!box.hidden){ box.hidden=true; return; } const rr=weekRows(el.dataset.mwk); const bd={}; rr.forEach(r=>{ (bd[r.s.date]=bd[r.s.date]||[]).push(r); }); box.innerHTML=Object.keys(bd).sort().map(d=>`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin:8px 0 2px">${dfmt(d)}</div>${bd[d].map(setLine).join('')}`).join('')||'<div class="s">No sets.</div>'; box.hidden=false; });
+}
 function pageVolume(B,T,A){
   T.textContent='Volume'; const plan=activePlan(); const f=focusOf(plan); const wk=weekStartISO(); const V=state.volume||{};
   const muscles=[...new Set([...Object.keys(f), ...plan.data.days.flatMap(d=>d.slots.map(s=>s.muscle))])];

@@ -1038,7 +1038,7 @@ function toggleTask(id, B,T,A){
   if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); if(!inPlace){ notesKeep(B,T,A); return; } const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); const w=document.createElement('div'); w.innerHTML=bubbleHTML(t); el.replaceWith(w.firstElementChild); bindBubble($('#t-'+id),B,T,A); notesStat(); return; }
   t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && isoLocal(x.done_at)===D).length;
   t.shine = COMBO[n] ? {text:COMBO[n], big:true} : {text:shineLine(), big:false};
-  tasksSave(); confetti(); if(COMBO[n]) cheerDog(COMBO[n], 4000); buzz('double'); play(COMBO[n]?'fanfare':'coin');
+  tasksSave(); confetti(); { const line=COMBO[n] || (n%3===0 ? [`${n} done. Keep the streak moving.`,`${n} today. The dog approves.`,`${n} down. Who is stopping you? Nobody.`][(n/3)%3|0] : null); if(line) cheerDog(line, 4000); } buzz('double'); play((COMBO[n]||n%3===0)?'fanfare':'coin');
   if(!inPlace){ notesKeep(B,T,A); return; }
   const w=document.createElement('div'); w.innerHTML=bubbleHTML(t)+`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; const nb=w.firstElementChild, coach=w.lastElementChild; el.replaceWith(nb); nb.after(coach); bindBubble(nb,B,T,A); notesStat();
   if(coach.scrollIntoView) coach.scrollIntoView({behavior:'smooth',block:'nearest'});

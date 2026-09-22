@@ -399,7 +399,8 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
 .why{font-size:12px;color:var(--gold);padding:0 14px 8px;line-height:1.35}
 .setrow.ghost .val.tgt{border:1px dashed #6b5419;color:var(--gold)}
 .plat{font-size:12px;color:var(--red);border:1px solid #5a2b2b;border-radius:7px;padding:3px 8px}
-.recchip{font-size:12px;border:1px solid var(--line2);border-radius:999px;padding:1px 9px;color:var(--gold);min-height:0}
+.daymeta .chiprow{display:inline-flex;gap:8px;flex-wrap:nowrap;align-items:center}
+.recchip{white-space:nowrap;flex:none;font-size:12px;border:1px solid var(--line2);border-radius:999px;padding:1px 9px;color:var(--gold);min-height:0}
 .recchip.on{color:var(--green);border-color:#2f5a44}
 .meters{display:flex;gap:6px;width:100%;margin:0 0 10px;padding:0;text-align:left}
 .meters .m{flex:1;display:block;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:6px 8px}
@@ -458,7 +459,7 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
     <div class="brand"><b>IRON</b> · SHANKAR</div>
     <div class="status" id="status"><span class="dot"></span><span id="statusTxt">loading</span></div>
   </header>
-  <div id="pager"><div class="track" id="ptrack"><section class="pane" id="paneNotes"><div class="panehead"><h2>Notes</h2><span style="display:flex;gap:8px;align-items:center"><button class="act hidden" id="startSess">▶ Start session</button><button class="act hidden" id="sentBtn">Sent 0</button><button class="act hidden" id="notesAct"></button></span></div><div class="panebody" id="notesBody"></div></section><section class="pane" id="paneWork"><main id="main"></main></section><section class="pane" id="paneVision"><div class="panehead"><h2>Vision</h2><button class="act" id="visionAct">+ Line</button></div><div class="panebody" id="visionBody"></div></section></div></div>
+  <div id="pager"><div class="track" id="ptrack"><section class="pane" id="paneNotes"><div class="panehead"><h2>Notes</h2><span style="display:flex;gap:8px;align-items:center"><button class="act hidden" id="sentBtn">Sent 0</button><button class="act hidden" id="notesAct"></button></span></div><div class="panebody" id="notesBody"></div></section><section class="pane" id="paneWork"><main id="main"></main></section><section class="pane" id="paneVision"><div class="panehead"><h2>Vision</h2><button class="act" id="visionAct">+ Line</button></div><div class="panebody" id="visionBody"></div></section></div></div>
 </div>
 
 <button class="fab" id="fab" aria-label="Menu">⋯</button>
@@ -1125,7 +1126,7 @@ function render(){
   const deload=!!state.settings.deload[weekStartISO(D)];
   let html = `
   <div class="dayhead"><label class="daypick"><h1 class="dayname" id="dayName">${esc(day.name)}</h1><span class="caret" aria-hidden="true"></span><select id="daySel" aria-label="Choose the workout for this day">${days.map(d=>`<option value="${d.key}" ${d.key===day.key?'selected':''}>${esc(d.name)}</option>`).join('')}<option value="__rest">Rest day</option></select></label></div>
-  <div class="daymeta">${today?'':`<span class="past">${dLabel}</span>`}${deload?'<span class="past">deload week</span>':''}<span><b>${planSlots.length}</b> exercises</span><span><b>${planSlots.reduce((a,s)=>a+plannedSets(s),0)}</b> planned</span><span><b>${ds.length}</b> logged</span>${ds.length?`<span><b>${ton.toLocaleString()}</b> tonnage</span>`:''}${span?`<span class="clock" id="clock">${fmtDur(((liveSess?Date.now():span.last)-span.start)/1000)}${span.warm?'<small style="color:var(--muted)"> incl. warm-up</small>':''}</span>`:(today?`<button class="recchip" id="startSess2">▶ start session</button>`:'')}${today?`<button class="recchip ${answered?'on':''}" id="recBtn">${answered?'recovery ✓':'recovery?'}</button>`:''}</div>
+  <div class="daymeta">${today?'':`<span class="past">${dLabel}</span>`}${deload?'<span class="past">deload week</span>':''}<span><b>${planSlots.length}</b> exercises</span><span><b>${planSlots.reduce((a,s)=>a+plannedSets(s),0)}</b> planned</span><span><b>${ds.length}</b> logged</span>${ds.length?`<span><b>${ton.toLocaleString()}</b> tonnage</span>`:''}${span?`<span class="clock" id="clock">${fmtDur(((liveSess?Date.now():span.last)-span.start)/1000)}${span.warm?'<small style="color:var(--muted)"> incl. warm-up</small>':''}</span>`:''}${today?`<span class="chiprow">${span?'':`<button class="recchip" id="startSess2">▶ start session</button>`}<button class="recchip ${answered?'on':''}" id="recBtn">${answered?'recovery ✓':'recovery?'}</button></span>`:''}</div>
   ${metersRow(D)}
   <div class="datestrip" id="dateStrip">${dateStrip(D)}</div>
   ${healthLine(D)}

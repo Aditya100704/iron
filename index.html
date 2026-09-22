@@ -328,6 +328,28 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
 .vlog .c{background:var(--surface);border:1px solid var(--gold);border-radius:12px;padding:10px 6px;text-align:center}
 .vlog .n{font-family:var(--display);font-size:26px;color:var(--gold);line-height:1;font-variant-numeric:tabular-nums}
 .vlog .k{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+#dog{position:fixed;left:0;right:0;bottom:calc(72px + var(--safe-b));z-index:97;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:auto;transform:translateY(140%);transition:transform .45s cubic-bezier(.2,.9,.3,1.2)}
+#dog.on{transform:none}
+#dog.off{transform:translateY(160%);transition:transform .5s ease-in}
+#dog .dg-bub{background:#fff;color:#111;font-weight:700;font-size:15px;padding:10px 14px;border-radius:16px;max-width:82vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4);position:relative}
+#dog .dg-bub:after{content:'';position:absolute;left:50%;bottom:-8px;margin-left:-8px;border:8px solid transparent;border-top-color:#fff;border-bottom:0}
+#dog .dg-pup{filter:drop-shadow(0 12px 18px rgba(0,0,0,.45));animation:dg-bounce .5s ease-in-out infinite alternate;transform-origin:50% 100%}
+#dog .dg-head{transform-origin:61px 70px;animation:dg-nod .5s ease-in-out infinite alternate}
+#dog .dg-earL{transform-origin:34px 30px;animation:dg-earL .5s ease-in-out infinite alternate}
+#dog .dg-earR{transform-origin:88px 30px;animation:dg-earR .5s ease-in-out infinite alternate}
+#dog .dg-tail{transform-origin:92px 78px;animation:dg-wag .25s ease-in-out infinite alternate}
+#dog .dg-armL{transform-origin:38px 78px;animation:dg-armL .5s ease-in-out infinite alternate}
+#dog .dg-armR{transform-origin:86px 78px;animation:dg-armR .5s ease-in-out infinite alternate}
+#dog .dg-tongue{transform-origin:61px 65px;animation:dg-tongue .5s ease-in-out infinite alternate}
+@keyframes dg-bounce{from{transform:translateY(0) scaleX(1) rotate(-4deg)}to{transform:translateY(-14px) scaleX(1.04) rotate(4deg)}}
+@keyframes dg-nod{from{transform:rotate(-8deg)}to{transform:rotate(8deg)}}
+@keyframes dg-earL{from{transform:rotate(-16deg)}to{transform:rotate(14deg)}}
+@keyframes dg-earR{from{transform:rotate(16deg)}to{transform:rotate(-14deg)}}
+@keyframes dg-wag{from{transform:rotate(-28deg)}to{transform:rotate(28deg)}}
+@keyframes dg-armL{from{transform:rotate(-30deg)}to{transform:rotate(20deg)}}
+@keyframes dg-armR{from{transform:rotate(30deg)}to{transform:rotate(-20deg)}}
+@keyframes dg-tongue{from{transform:scaleY(.6)}to{transform:scaleY(1.2)}}
+@media (prefers-reduced-motion:reduce){#dog *{animation:none!important}}
 .vcount{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:4px 0 12px}
 .vcount .c{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
 .vcount .n{font-family:var(--display);font-size:30px;color:var(--gold);line-height:1;font-variant-numeric:tabular-nums}
@@ -700,7 +722,7 @@ function sessionDone(ss, name, dur){
   modal(`Session done · ${esc(name)}`, `<div class="detail"><div class="kvs"><div class="tile"><div class="k">Time</div><div class="v">${dur}</div></div><div class="tile"><div class="k">Sets</div><div class="v">${ss.length}<small> ${hard} hard</small></div></div><div class="tile"><div class="k">PRs</div><div class="v" style="color:var(--gold)">${prs.length}</div></div><div class="tile"><div class="k">Tonnage</div><div class="v">${ton.toLocaleString()}</div></div></div>
     <div class="volcard" style="margin-top:12px"><div class="k">${muscles.join(' · ')}</div><div class="vchg"><b>${head}</b><span>${prs.length?'Congratulations on '+prs.length+' PR'+(prs.length>1?'s':'')+'. Every one of them is a number nobody can take back.':'No PR today — that is fine. The sets are in the book and the book is what grows.'}</span></div>${prList}</div>
     <div class="empty" style="text-align:left;padding:10px 0 0">${exList}</div></div>`, [{t:'Done',gold:true}]);
-  confetti(); if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); setTimeout(confetti, 700); } else buzz('double');
+  confetti(); cheerDog(prs.length?`Session done — ${prs.length} PR${prs.length>1?'s':''}! Good boy… I mean, good work.`:'Session done. That is the rep.', 4500); if(prs.length){ buzz(alertSettings().pr); play(alertSettings().prSound); setTimeout(confetti, 700); } else buzz('double');
 }
 function autoFinishSession(){ if(!state.session || (state.session.notes||{}).hold) return; /* notes.hold = the coach reopened it for a manual Finish */ const ss=sessionSets(); if(!ss.length) return; const last=new Date(ss[ss.length-1].created_at).getTime(); if(Date.now()-last < SESSION_GAP) return; const name=state.session.dayName||''; const dur=fmtDur((last-new Date(ss[0].created_at).getTime())/1000); closeSession(ss[ss.length-1].created_at); render(); if($('#modal').classList.contains('on')) return; sessionDone(ss, name, dur); }
 function sessionSpan(){ const ss=sessionSets(); const w=state.session && state.session.date===todayISO() && state.session.notes && state.session.notes.warmAt; if(!ss.length && !w) return null; const start=w?new Date(w).getTime():new Date(ss[0].created_at).getTime(); const last=ss.length?new Date(ss[ss.length-1].created_at).getTime():Date.now(); return {start, last, warm:!!w}; }
@@ -885,6 +907,18 @@ function tasksSave(){ state.tasks.updated=Date.now(); persist(); enqueue({t:'set
 function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at); }
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }
+const DOG_SVG=`<svg viewBox="0 0 120 120" width="150" height="150" aria-hidden="true">
+<g class="dg-tail"><path d="M92 78 q18 -14 8 -30" fill="none" stroke="#c98a4b" stroke-width="9" stroke-linecap="round"/></g>
+<g class="dg-body"><ellipse cx="62" cy="86" rx="30" ry="22" fill="#e6a86a"/><ellipse cx="62" cy="94" rx="18" ry="12" fill="#f7d9b5"/>
+<g class="dg-arm dg-armL"><path d="M38 78 q-16 -14 -8 -30" fill="none" stroke="#e6a86a" stroke-width="10" stroke-linecap="round"/></g>
+<g class="dg-arm dg-armR"><path d="M86 78 q16 -14 8 -30" fill="none" stroke="#e6a86a" stroke-width="10" stroke-linecap="round"/></g>
+<rect x="44" y="98" width="12" height="16" rx="6" fill="#d9954f"/><rect x="66" y="98" width="12" height="16" rx="6" fill="#d9954f"/></g>
+<g class="dg-head"><g class="dg-ear dg-earL"><ellipse cx="34" cy="42" rx="10" ry="20" fill="#c98a4b" transform="rotate(20 34 42)"/></g><g class="dg-ear dg-earR"><ellipse cx="88" cy="42" rx="10" ry="20" fill="#c98a4b" transform="rotate(-20 88 42)"/></g>
+<circle cx="61" cy="48" r="27" fill="#e6a86a"/><ellipse cx="61" cy="60" rx="15" ry="11" fill="#f7d9b5"/>
+<circle cx="50" cy="44" r="4.2" fill="#1b1b1b"/><circle cx="72" cy="44" r="4.2" fill="#1b1b1b"/><circle cx="51.5" cy="42.5" r="1.4" fill="#fff"/><circle cx="73.5" cy="42.5" r="1.4" fill="#fff"/>
+<ellipse cx="61" cy="56" rx="5" ry="3.6" fill="#2a1d14"/><path d="M53 63 q8 8 16 0" fill="none" stroke="#2a1d14" stroke-width="2.4" stroke-linecap="round"/><path class="dg-tongue" d="M58 65 q3 7 6 0" fill="#f26d7d"/>
+<circle cx="42" cy="56" r="4" fill="#f4a9a0" opacity=".7"/><circle cx="80" cy="56" r="4" fill="#f4a9a0" opacity=".7"/></g></svg>`;
+function cheerDog(text, ms){ let d=$('#dog'); if(d) d.remove(); d=document.createElement('div'); d.id='dog'; d.innerHTML=`<div class="dg-bub">${esc(text)}</div><div class="dg-pup">${DOG_SVG}</div>`; document.body.appendChild(d); requestAnimationFrame(()=>d.classList.add('on')); const bye=()=>{ d.classList.remove('on'); d.classList.add('off'); setTimeout(()=>d.remove(), 600); }; d.onclick=bye; d._t=setTimeout(bye, ms||3800); }
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
 const NOTE_ATT={b64:null}; /* photo picked for the next note; module-level so a pane rebuild cannot lose it */
 function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div>${t.img?`<img class="timg" data-timg="${t.img}" alt="">`:''}<div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
@@ -900,7 +934,7 @@ const VAUDIO={el:null, key:null, slide:-1, lastT:0, acc:0};
 /* the visualisation log: one entry per finished play (or per completed loop round); minutes = time actually heard */
 function vlog(){ state.settings.vlog=state.settings.vlog||{sessions:[], sec:0}; return state.settings.vlog; }
 function vlogSave(){ persist(); enqueue({t:'setting.upsert', row:{key:'vlog', value:vlog()}}); }
-function vlogFinish(key, celebrate){ const L=vlog(); L.sessions.push({k:key, at:new Date().toISOString(), sec:Math.round(VAUDIO.acc)}); L.sec=(L.sec||0)+Math.round(VAUDIO.acc); VAUDIO.acc=0; vlogSave(); paintVlog(); if(celebrate){ confetti(); buzz('double'); const n=L.sessions.length; const D=todayISO(); const td=L.sessions.filter(x=>isoLocal(x.at)===D).length; modal('Great job', `<div class="empty" style="text-align:left;padding:0 0 8px;font-size:16px">Visualisation ${n} done${td>1?` — ${td} today`:''}. ${Math.round(L.sec/60)} minutes of it so far.</div><div class="empty" style="text-align:left;padding:0;color:var(--muted)">The picture is the primer. Now go do the rep it pointed at.</div>`, [{t:'Done',gold:true}]); } }
+function vlogFinish(key, celebrate){ const L=vlog(); L.sessions.push({k:key, at:new Date().toISOString(), sec:Math.round(VAUDIO.acc)}); L.sec=(L.sec||0)+Math.round(VAUDIO.acc); VAUDIO.acc=0; vlogSave(); paintVlog(); if(celebrate){ confetti(); cheerDog('Visualisation done. Now go do the rep.', 4000); buzz('double'); const n=L.sessions.length; const D=todayISO(); const td=L.sessions.filter(x=>isoLocal(x.at)===D).length; modal('Great job', `<div class="empty" style="text-align:left;padding:0 0 8px;font-size:16px">Visualisation ${n} done${td>1?` — ${td} today`:''}. ${Math.round(L.sec/60)} minutes of it so far.</div><div class="empty" style="text-align:left;padding:0;color:var(--muted)">The picture is the primer. Now go do the rep it pointed at.</div>`, [{t:'Done',gold:true}]); } }
 function paintVlog(){ const el=$('#vlogBox'); if(!el) return; const L=vlog(); const D=todayISO(); const td=L.sessions.filter(x=>isoLocal(x.at)===D).length; const wk=weekStartISO(); const w=L.sessions.filter(x=>isoLocal(x.at)>=wk).length; el.innerHTML=`<div class="c"><div class="n">${L.sessions.length}</div><div class="k">sessions</div></div><div class="c"><div class="n">${Math.round((L.sec||0)/60)}</div><div class="k">minutes heard</div></div><div class="c"><div class="n">${td}<small style="font-size:13px;color:var(--muted)">/${w}</small></div><div class="k">today / this week</div></div>`; }
 /* Loop = repeat the main part for ever (intro and outro skipped; the [loop] marks in the script, times in settings key vision_audio); speed 0.75-2x, pitch kept */
 const vLoop=()=>!!LS.get('vLoop', false), vSpeed=()=>+LS.get('vSpeed', 1)||1;
@@ -1004,7 +1038,7 @@ function toggleTask(id, B,T,A){
   if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); if(!inPlace){ notesKeep(B,T,A); return; } const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); const w=document.createElement('div'); w.innerHTML=bubbleHTML(t); el.replaceWith(w.firstElementChild); bindBubble($('#t-'+id),B,T,A); notesStat(); return; }
   t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && isoLocal(x.done_at)===D).length;
   t.shine = COMBO[n] ? {text:COMBO[n], big:true} : {text:shineLine(), big:false};
-  tasksSave(); confetti(); buzz('double'); play(COMBO[n]?'fanfare':'coin');
+  tasksSave(); confetti(); if(COMBO[n]) cheerDog(COMBO[n], 4000); buzz('double'); play(COMBO[n]?'fanfare':'coin');
   if(!inPlace){ notesKeep(B,T,A); return; }
   const w=document.createElement('div'); w.innerHTML=bubbleHTML(t)+`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; const nb=w.firstElementChild, coach=w.lastElementChild; el.replaceWith(nb); nb.after(coach); bindBubble(nb,B,T,A); notesStat();
   if(coach.scrollIntoView) coach.scrollIntoView({behavior:'smooth',block:'nearest'});

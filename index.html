@@ -653,7 +653,8 @@ const mkComment = (hard, partials, side) => [hard?'hard?':'', partials>0?'p'+par
 const lowConf = (reps, rir) => +reps>15 && rir!=null && +rir>=3;
 function exBest(name, unit, excludeId){ let best={e1:0,w:0,set:null,repsAt:{}}; for(const s of exSets(name)){ if(s.unit!==unit) continue; if(excludeId && s.id===excludeId) continue; if(lowConf(s.reps,s.rir)) continue; const w=+s.weight, r=+s.reps; const e=e1rm(w,r); if(e>best.e1 || (e===best.e1 && best.set && r>+best.set.reps)){best.e1=e;best.set=s;} if(w>best.w) best.w=w; const k=fmtW(w); if(!(k in best.repsAt)||r>best.repsAt[k]) best.repsAt[k]=r; } return best; }
 // FitNotes-style PR: e1RM best, OR heaviest weight ever, OR most reps ever at a weight lifted before.
-function prKind(name, unit, w, r, excludeId, rir){ if(lowConf(r,rir)) return null; const b=exBest(name,unit,excludeId); if(!r||!w) return null; const e=e1rm(w,r); if(!b.set) return 'first'; if(e>b.e1) return 'e1rm'; if(w>b.w) return 'weight'; const k=fmtW(w); if(k in b.repsAt && r>b.repsAt[k]) return 'reps'; return null; }
+function prKind(name, unit, w, r, excludeId, rir){ if(lowConf(r,rir)) return null; const b=exBest(name,unit,excludeId); if(!r||!w) return null; const e=e1rm(w,r); if(!b.set) return 'first'; if(e>b.e1) return 'e1rm'; if(w>b.w) return 'weight'; if(w>=0.7*b.w && !exSets(name).some(s=>s.unit===unit && !(excludeId && s.id===excludeId) && !lowConf(s.reps,s.rir) && +s.weight>=w && +s.reps>=r)) return 'reps'; return null; }
+function repsBeaten(name, unit, w, excludeId){ let m=0; for(const s of exSets(name)){ if(s.unit!==unit || (excludeId && s.id===excludeId) || lowConf(s.reps,s.rir)) continue; if(+s.weight>=w && +s.reps>m) m=+s.reps; } return m; }
 const isPR = kind => !!kind && kind!=='first';
 function exLastSessions(name, n=3, beforeDate){ const by={}; for(const s of exSets(name)){ if(beforeDate && s.date>=beforeDate) continue; (by[s.date]=by[s.date]||[]).push(s);} return Object.keys(by).sort().reverse().slice(0,n).map(d=>({date:d,sets:by[d].sort((a,b)=>(a.set_no||0)-(b.set_no||0))})); }
 function curDate(){ return state.viewDate||todayISO(); }
@@ -928,7 +929,7 @@ const DOG_SVG=`<svg viewBox="0 0 120 120" width="150" height="150" aria-hidden="
 <circle cx="50" cy="44" r="4.2" fill="#1b1b1b"/><circle cx="72" cy="44" r="4.2" fill="#1b1b1b"/><circle cx="51.5" cy="42.5" r="1.4" fill="#fff"/><circle cx="73.5" cy="42.5" r="1.4" fill="#fff"/>
 <ellipse cx="61" cy="56" rx="5" ry="3.6" fill="#2a1d14"/><path d="M53 63 q8 8 16 0" fill="none" stroke="#2a1d14" stroke-width="2.4" stroke-linecap="round"/><path class="dg-tongue" d="M58 65 q3 7 6 0" fill="#f26d7d"/>
 <circle cx="42" cy="56" r="4" fill="#f4a9a0" opacity=".7"/><circle cx="80" cy="56" r="4" fill="#f4a9a0" opacity=".7"/></g></svg>`;
-function cheerDog(text, ms){ let d=$('#dog'); if(d) d.remove(); d=document.createElement('div'); d.id='dog'; d.innerHTML=`<div class="dg-bub">${esc(text)}</div><div class="dg-pup">${DOG_SVG}</div>`; document.body.appendChild(d); requestAnimationFrame(()=>d.classList.add('on')); const bye=()=>{ d.classList.remove('on'); d.classList.add('off'); setTimeout(()=>d.remove(), 600); }; d.onclick=bye; d._t=setTimeout(bye, ms||3800); }
+function cheerDog(text, ms){ let d=$('#dog'); if(d) d.remove(); d=document.createElement('div'); d.id='dog'; d.innerHTML=`<div class="dg-bub">${esc(text)}</div><div class="dg-pup">${DOG_SVG}</div>`; document.body.appendChild(d); requestAnimationFrame(()=>d.classList.add('on')); const bye=()=>{ d.classList.remove('on'); d.classList.add('off'); setTimeout(()=>d.remove(), 600); }; d.onclick=bye; d._t=setTimeout(bye, (ms||3800)+2000); }
 function confetti(){ const c=$('#confetti'); const x=c.getContext('2d'); c.width=innerWidth; c.height=innerHeight; c.hidden=false; const cols=['#d3a23a','#f0d27a','#ffffff','#946a00','#7fb46b']; const ps=[]; for(let i=0;i<110;i++) ps.push({x:c.width/2+(Math.random()-.5)*120, y:c.height*0.55, vx:(Math.random()-.5)*14, vy:-Math.random()*16-4, r:3+Math.random()*4, col:cols[i%cols.length], rot:Math.random()*6, vr:(Math.random()-.5)*.4}); let t0=performance.now(); const step=(now)=>{ const dt=Math.min(32, now-t0)/16; t0=now; x.clearRect(0,0,c.width,c.height); let alive=0; ps.forEach(p=>{ p.vy+=0.55*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.rot+=p.vr; if(p.y<c.height+20){ alive++; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.col; x.fillRect(-p.r,-p.r/2,p.r*2,p.r); x.restore(); } }); if(alive) requestAnimationFrame(step); else c.hidden=true; }; requestAnimationFrame(step); }
 const NOTE_ATT={b64:null}; /* photo picked for the next note; module-level so a pane rebuild cannot lose it */
 function bubbleHTML(t){ const tm=new Date(t.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); return `<div class="bub ${t.kind==='note'?'note':''} ${t.done_at?'done':''}" data-tid="${t.id}" id="t-${t.id}">${t.kind==='task'?`<button class="ck" data-tick="${t.id}" aria-label="Done">${t.done_at?'✓':''}</button>`:''}<div>${t.img?`<img class="timg" data-timg="${t.img}" alt="">`:''}<div class="tx">${esc(t.text)}</div><div class="tm">${tm}${t.done_at?' · done '+new Date(t.done_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</div></div></div>`; }
@@ -1406,7 +1407,7 @@ function updateHint(){
   if(lowConf(r,pad.rir)){ el.innerHTML=`${tg}${tg?' · ':''}<span style="color:var(--muted)">Over 15 reps at RIR ${pad.rir}: counts as a set, not as a strength estimate</span>`; return; }
   if(kind==='e1rm') msg=`<b>PR</b> — e1RM ${e} beats ${b.e1} (${fmtW(b.set.weight)}×${b.set.reps})`;
   else if(kind==='weight') msg=`<b>PR</b> — heaviest ever on this lift (prev ${fmtW(b.w)})`;
-  else if(kind==='reps') msg=`<b>PR</b> — most reps ever at ${fmtW(w)} (prev ${b.repsAt[fmtW(w)]})`;
+  else if(kind==='reps') msg=`<b>PR</b> — most reps ever at ${fmtW(w)} ${pad.unit} or heavier (prev best ${repsBeaten(pad.name,pad.unit,w)||0})`;
   else if(kind==='first') msg=`first time logged · e1RM ${e}`;
   else msg=esc(`e1RM ${e} · best ${b.e1}${b.repsAt[fmtW(w)]!=null?' · best at this weight '+b.repsAt[fmtW(w)]+' reps':''}`);
   el.innerHTML = (tg?tg+'<br>':'') + msg;
@@ -1435,7 +1436,7 @@ $('#padLog').onclick=()=>{
   state.sets.push({...row,_local:true}); persist(); enqueue({t:'set.insert', row});
   if(is_pr) firePR(); else if(navigator.vibrate) navigator.vibrate(15);
   const hit = tg && w>=tg.w && r>=tg.r;
-  const lbl={e1rm:'PR · e1RM '+e1rm(w,r), weight:'PR · heaviest ever', reps:'PR · most reps at '+fmtW(w)+pad.unit, first:'First time logged'}[kind];
+  const lbl={e1rm:'PR · e1RM '+e1rm(w,r), weight:'PR · heaviest ever', reps:'PR · most reps at '+fmtW(w)+pad.unit+' or heavier', first:'First time logged'}[kind];
   toast(lbl?`${lbl} · ${pad.name}`:`Set ${row.set_no} logged${hit?' · target hit':''}${today?'':' · '+D.slice(5)}`, is_pr||hit);
   if(today && state.settings.restOn){ const ss=isSupersetNow(); startRest(ss ? (state.settings.ssRest||45) : restFor(pad.name), pad.name); if(ss) toast('Superset · short rest'); }
   closeLayer('pad'); render();

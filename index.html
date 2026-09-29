@@ -595,7 +595,7 @@ async function fullSync(){
     const volRow=vol.find(r=>r.key==='volume'); if(volRow && volRow.value) state.volume = volRow.value;
     const lRow=vol.find(r=>r.key==='vlog'); if(lRow && lRow.value && (lRow.value.sessions||[]).length>=((state.settings.vlog||{}).sessions||[]).length) state.settings.vlog=lRow.value;
     const vRow=vol.find(r=>r.key==='vision'); if(vRow && vRow.value){ const loc=visionData(); if((vRow.value.updated||0)>=(loc.updated||0)){ state.vision=vRow.value; LS.set('vision',state.vision); } }
-    const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; const local=state.tasks||{items:[]}; const lt=local.updated||0, rt=remote.updated||0; if(rt>=lt) state.tasks=remote; else enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); LS.set('tasks', state.tasks); }
+    const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; tasksStamp(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); if(JSON.stringify(merged.items)!==JSON.stringify(remote.items||[])) enqueueOnce({t:'tasks.sync'}); }
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
     try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,and(note.not.like.task:*,note.not.like.vision:*))&order=taken_at.desc&limit=2000'); }catch(e){}
@@ -625,6 +625,8 @@ async function flushQueue(){
       else if(op.t==='photo.delete') await api.del('photos','id=eq.'+op.id);
       else if(op.t==='rec.insert') await api.post('recovery',[op.row]);
       else if(op.t==='note.read') await api.patch('coach_notes','id=eq.'+op.id,{read_at:op.at});
+      else if(op.t==='tasks.sync') await tasksPush();
+      else if(op.t==='setting.upsert' && op.row && op.row.key==='tasks') await tasksPush();
       else if(op.t==='setting.upsert') await api.post('settings',[op.row],'resolution=merge-duplicates,return=minimal');
       else if(op.t==='meal.insert') await api.post('meals',[op.row]);
       else if(op.t==='meal.delete') await api.del('meals','id=eq.'+op.id);
@@ -638,6 +640,9 @@ async function flushQueue(){
 }
 function enqueue(op){ state.queue.push(op); persist(); if(state.online) flushQueue().then(()=>setStatus(state.queue.length?'busy':'ok', state.queue.length?state.queue.length+' pending':'synced')); else setStatus('off', state.queue.length+' pending'); }
 window.addEventListener('online',()=>{state.online=true; fullSync();});
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') tasksPull(); });
+window.addEventListener('focus',()=>tasksPull());
+setInterval(()=>{ if(document.visibilityState==='visible') tasksPull(); }, 30000);
 window.addEventListener('offline',()=>{state.online=false; setStatus('off','offline');});
 
 /* ================= DOMAIN ================= */
@@ -914,7 +919,22 @@ const SHINE=[
 ];
 const COMBO={3:'Three today. The engine is warm.',5:'Five. This is what a real day looks like.',7:'Seven. Stop looking for permission, you clearly have it.',10:'TEN. That is not a good day, that is a standard.',15:'Fifteen. Somebody tell the runway to hurry up.'};
 function tasksList(){ state.tasks=state.tasks||{items:[],updated:0,lineIdx:0}; if(!Array.isArray(state.tasks.items)) state.tasks.items=[]; return state.tasks.items; }
-function tasksSave(){ state.tasks.updated=Date.now(); persist(); enqueue({t:'setting.upsert', row:{key:'tasks', value:state.tasks}}); updateChatBadge(); try{ PAGER.notesSig=notesSig(); }catch(e){} }
+// Notes sync (v8.0): per-item merge. Every changed/new item gets .mod, deleted ids go to .deleted (tombstones), and the push re-reads the server copy and merges before writing, so two devices never wipe each other's notes.
+const taskKey = t => JSON.stringify([t.text,t.kind,t.done_at||0,t.shine||0,t.img||0,t.journaled_at||0,t.created_at||0]);
+function tasksStamp(){ const now=Date.now(); if(LS.get('tasksSnap',null)===null){ const init={}; for(const t of tasksList()) init[t.id]=taskKey(t); LS.set('tasksSnap',init); } const snap=LS.get('tasksSnap',{}); const items=tasksList(); const ids=new Set(); state.tasks.deleted=state.tasks.deleted||{};
+  for(const t of items){ ids.add(t.id); const k=taskKey(t); if(snap[t.id]!==k){ t.mod=now; snap[t.id]=k; } }
+  for(const id of Object.keys(snap)) if(!ids.has(id)){ state.tasks.deleted[id]=now; delete snap[id]; }
+  LS.set('tasksSnap',snap); }
+function tasksMerge(a, b){ a=a||{items:[]}; b=b||{items:[]}; const del={...(a.deleted||{})}; for(const [k,v] of Object.entries(b.deleted||{})) del[k]=Math.max(del[k]||0,v);
+  const by={}; for(const t of [...(b.items||[]), ...(a.items||[])]){ const o=by[t.id]; if(!o || (t.mod||0)>(o.mod||0) || ((t.mod||0)===(o.mod||0) && t.done_at && !o.done_at)) by[t.id]=t; }
+  const cut=Date.now()-60*864e5; for(const k of Object.keys(del)) if(del[k]<cut) delete del[k];
+  const items=Object.values(by).filter(t=>!(del[t.id] && del[t.id]>=(t.mod||0))).sort((x,y)=>(x.created_at||'').localeCompare(y.created_at||''));
+  return {...b, ...a, items, deleted:del, updated:Math.max(a.updated||0,b.updated||0), lineIdx:Math.max(a.lineIdx||0,b.lineIdx||0)}; }
+function tasksAdopt(merged){ state.tasks=merged; const snap={}; for(const t of merged.items) snap[t.id]=taskKey(t); LS.set('tasksSnap',snap); LS.set('tasks',state.tasks); }
+async function tasksPush(){ const rows=await api.get("settings?select=value&key=eq.tasks"); const remote=rows[0]&&rows[0].value; tasksStamp(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); await api.post('settings',[{key:'tasks', value:merged}],'resolution=merge-duplicates,return=minimal'); }
+async function tasksPull(){ if(!state.online) return; try{ const rows=await api.get("settings?select=value&key=eq.tasks"); const remote=rows[0]&&rows[0].value; if(!remote) return; tasksStamp(); const before=notesSig(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); if(JSON.stringify(merged.items)!==JSON.stringify(remote.items||[])) enqueueOnce({t:'tasks.sync'}); if(notesSig()!==before){ updateChatBadge(); try{ if(PAGER.idx===0) renderNotesPane(); }catch(e){} } }catch(e){ console.warn('tasks pull',e); } }
+function enqueueOnce(op){ if(state.queue.some(x=>x.t===op.t)) return; enqueue(op); }
+function tasksSave(){ state.tasks.updated=Date.now(); tasksStamp(); persist(); enqueueOnce({t:'tasks.sync'}); updateChatBadge(); try{ PAGER.notesSig=notesSig(); }catch(e){} }
 function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at); }
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }

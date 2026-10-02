@@ -572,7 +572,7 @@ const state = {
   viewDay: null, photosMeta: [],
 };
 for(const k of ['swaps','units','extra','setsOv','swapsDay','platDismiss','deload','deloadNo','volSeen']) state.settings[k]=state.settings[k]||{}; if(!state.settings.alertsV81){ state.settings.alerts=Object.assign({}, state.settings.alerts||{}, {notify:false}); state.settings.alertsV81=1; try{ LS.set('settings',state.settings); }catch(e){} } /* v8.1: notifications off by default (his order 10-02); sound stays on */
-const persist = () => { LS.set('tasks',state.tasks); LS.set('exercises',state.exercises); LS.set('sets',state.sets); LS.set('workouts',state.workouts); LS.set('plans',state.plans); LS.set('settings',state.settings); LS.set('queue',state.queue); LS.set('session',state.session); LS.set('lastSync',state.lastSync); LS.set('recovery',state.recovery); LS.set('notes',state.notes); LS.set('volume',state.volume); LS.set('foods',state.foods); LS.set('meals',state.meals); LS.set('body',state.body); };
+const persist = () => { tasksWrite(); LS.set('exercises',state.exercises); LS.set('sets',state.sets); LS.set('workouts',state.workouts); LS.set('plans',state.plans); LS.set('settings',state.settings); LS.set('queue',state.queue); LS.set('session',state.session); LS.set('lastSync',state.lastSync); LS.set('recovery',state.recovery); LS.set('notes',state.notes); LS.set('volume',state.volume); LS.set('foods',state.foods); LS.set('meals',state.meals); LS.set('body',state.body); };
 function setStatus(cls, txt){ const el=$('#status'); el.className='status '+cls; $('#statusTxt').textContent=txt; }
 
 async function fullSync(){
@@ -595,7 +595,7 @@ async function fullSync(){
     const volRow=vol.find(r=>r.key==='volume'); if(volRow && volRow.value) state.volume = volRow.value;
     const lRow=vol.find(r=>r.key==='vlog'); if(lRow && lRow.value && (lRow.value.sessions||[]).length>=((state.settings.vlog||{}).sessions||[]).length) state.settings.vlog=lRow.value;
     const vRow=vol.find(r=>r.key==='vision'); if(vRow && vRow.value){ const loc=visionData(); if((vRow.value.updated||0)>=(loc.updated||0)){ state.vision=vRow.value; LS.set('vision',state.vision); } }
-    const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; tasksStamp(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); if(JSON.stringify(merged.items)!==JSON.stringify(remote.items||[])) enqueueOnce({t:'tasks.sync'}); }
+    const tRow=vol.find(r=>r.key==='tasks'); if(tRow && tRow.value){ const remote=tRow.value; tasksStamp(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); if(tasksSig(state.tasks)!==tasksSig(remote)) enqueueOnce({t:'tasks.sync'}); }
     const pendM=new Set(state.queue.filter(op=>op.t==='meal.insert').map(op=>op.row.id)); state.meals = meals.concat((state.meals||[]).filter(m=>pendM.has(m.id) && !meals.some(x=>x.id===m.id)));
     state.foods = foods; state.body = body;
     try{ state.photosMeta = await api.get('photos?select=id,date,taken_at,note&or=(note.is.null,and(note.not.like.task:*,note.not.like.vision:*))&order=taken_at.desc&limit=2000'); }catch(e){}
@@ -640,8 +640,8 @@ async function flushQueue(){
 }
 function enqueue(op){ state.queue.push(op); persist(); if(state.online) flushQueue().then(()=>setStatus(state.queue.length?'busy':'ok', state.queue.length?state.queue.length+' pending':'synced')); else setStatus('off', state.queue.length+' pending'); }
 window.addEventListener('online',()=>{state.online=true; fullSync();});
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') tasksPull(); });
-window.addEventListener('focus',()=>tasksPull());
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ tasksOnRemote(); tasksPull(); } });
+window.addEventListener('focus',()=>{ tasksOnRemote(); tasksPull(); });
 setInterval(()=>{ if(document.visibilityState==='visible') tasksPull(); }, 30000);
 window.addEventListener('offline',()=>{state.online=false; setStatus('off','offline');});
 
@@ -920,21 +920,48 @@ const SHINE=[
 const COMBO={3:'Three today. The engine is warm.',5:'Five. This is what a real day looks like.',7:'Seven. Stop looking for permission, you clearly have it.',10:'TEN. That is not a good day, that is a standard.',15:'Fifteen. Somebody tell the runway to hurry up.'};
 function tasksList(){ state.tasks=state.tasks||{items:[],updated:0,lineIdx:0}; if(!Array.isArray(state.tasks.items)) state.tasks.items=[]; return state.tasks.items; }
 // Notes sync (v8.0): per-item merge. Every changed/new item gets .mod, deleted ids go to .deleted (tombstones), and the push re-reads the server copy and merges before writing, so two devices never wipe each other's notes.
+// v8.2 (tabs): the snapshot that decides "what did THIS tab change" lives in memory, one per tab. Until 8.1 it sat in localStorage, shared by every
+// tab, so a stale tab diffed its old copy against another tab's newer snapshot, stamped the stale copy as the newest and tombstoned notes it had never
+// seen. Every write to localStorage is now read-merge-write (tasksWrite), and every write is broadcast to the other tabs (BroadcastChannel
+// 'iron-tasks', with the 'storage' event as fallback), which merge it into memory and re-render — they never write back, so nothing ping-pongs.
+var TASK_SNAP=null, TASK_BC=null, TASK_UI_T=null, TASK_UI_WAIT=false, TASK_RX_T=null;
 const taskKey = t => JSON.stringify([t.text,t.kind,t.done_at||0,t.shine||0,t.img||0,t.journaled_at||0,t.created_at||0]);
-function tasksStamp(){ const now=Date.now(); if(LS.get('tasksSnap',null)===null){ const init={}; for(const t of tasksList()) init[t.id]=taskKey(t); LS.set('tasksSnap',init); } const snap=LS.get('tasksSnap',{}); const items=tasksList(); const ids=new Set(); state.tasks.deleted=state.tasks.deleted||{};
+function tasksSnapOf(items){ const s={}; for(const t of (items||[])) s[t.id]=taskKey(t); return s; }
+function tasksSig(o){ return JSON.stringify(((o&&o.items)||[]).map(t=>[t.id, t.mod||0, taskKey(t)])); }
+function tasksStamp(){ const now=Date.now(); if(!TASK_SNAP) TASK_SNAP=tasksSnapOf(tasksList()); const snap=TASK_SNAP; const items=tasksList(); const ids=new Set(); state.tasks.deleted=state.tasks.deleted||{};
   for(const t of items){ ids.add(t.id); const k=taskKey(t); if(snap[t.id]!==k){ t.mod=now; snap[t.id]=k; } }
-  for(const id of Object.keys(snap)) if(!ids.has(id)){ state.tasks.deleted[id]=now; delete snap[id]; }
-  LS.set('tasksSnap',snap); }
+  for(const id of Object.keys(snap)) if(!ids.has(id)){ state.tasks.deleted[id]=now; delete snap[id]; } }
 function tasksMerge(a, b){ a=a||{items:[]}; b=b||{items:[]}; const del={...(a.deleted||{})}; for(const [k,v] of Object.entries(b.deleted||{})) del[k]=Math.max(del[k]||0,v);
   const by={}; for(const t of [...(b.items||[]), ...(a.items||[])]){ const o=by[t.id]; if(!o || (t.mod||0)>(o.mod||0) || ((t.mod||0)===(o.mod||0) && t.done_at && !o.done_at)) by[t.id]=t; }
   const cut=Date.now()-60*864e5; for(const k of Object.keys(del)) if(del[k]<cut) delete del[k];
   const items=Object.values(by).filter(t=>!(del[t.id] && del[t.id]>=(t.mod||0))).sort((x,y)=>(x.created_at||'').localeCompare(y.created_at||''));
   return {...b, ...a, items, deleted:del, updated:Math.max(a.updated||0,b.updated||0), lineIdx:Math.max(a.lineIdx||0,b.lineIdx||0)}; }
-function tasksAdopt(merged){ state.tasks=merged; const snap={}; for(const t of merged.items) snap[t.id]=taskKey(t); LS.set('tasksSnap',snap); LS.set('tasks',state.tasks); }
-async function tasksPush(){ const rows=await api.get("settings?select=value&key=eq.tasks"); const remote=rows[0]&&rows[0].value; tasksStamp(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); await api.post('settings',[{key:'tasks', value:merged}],'resolution=merge-duplicates,return=minimal'); }
-async function tasksPull(){ if(!state.online) return; try{ const rows=await api.get("settings?select=value&key=eq.tasks"); const remote=rows[0]&&rows[0].value; if(!remote) return; tasksStamp(); const before=notesSig(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); if(JSON.stringify(merged.items)!==JSON.stringify(remote.items||[])) enqueueOnce({t:'tasks.sync'}); if(notesSig()!==before){ updateChatBadge(); try{ if(PAGER.idx===0) renderNotesPane(); }catch(e){} } }catch(e){ console.warn('tasks pull',e); } }
+// take a merged copy into memory, keeping the SAME objects for ids this tab already holds (an open edit dialog keeps a reference to its task; replacing the object would make its Save write into nothing)
+function tasksAdoptMem(merged){ const loc=new Map(tasksList().map(t=>[t.id,t]));
+  merged.items=merged.items.map(w=>{ const o=loc.get(w.id); if(!o || o===w) return w; for(const k of Object.keys(o)) if(!(k in w)) delete o[k]; Object.assign(o,w); return o; });
+  state.tasks=merged; TASK_SNAP=tasksSnapOf(merged.items); }
+// read-merge-write: whatever another tab already put on disk is merged in first (newest .mod wins, tombstones respected), so a stale tab can never overwrite a newer edit
+function tasksWrite(){ if(!state.tasks) return; if(!TASK_SNAP){ LS.set('tasks',state.tasks); return; } tasksStamp();
+  let raw=null; try{ raw=localStorage.getItem('iron.tasks'); }catch(e){} let disk=null; try{ disk=raw?JSON.parse(raw):null; }catch(e){}
+  if(disk && Array.isArray(disk.items)){ const before=notesSig(); tasksAdoptMem(tasksMerge(state.tasks, disk)); if(notesSig()!==before) tasksRefreshUI(); }
+  const out=JSON.stringify(state.tasks); if(out!==raw){ try{ localStorage.setItem('iron.tasks', out); }catch(e){} tasksBroadcast(); } }
+function tasksAdopt(merged){ tasksAdoptMem(merged); tasksWrite(); }
+function tasksBroadcast(){ try{ if(TASK_BC) TASK_BC.postMessage({t:'tasks', at:Date.now()}); }catch(e){} }
+// another tab saved: merge its copy from disk into memory (no write, no push — that tab already queued its own sync), re-render if anything changed
+function tasksOnRemote(){ clearTimeout(TASK_RX_T); TASK_RX_T=setTimeout(()=>{ if(!state.tasks || !TASK_SNAP) return; const disk=LS.get('tasks',null); if(!disk || !Array.isArray(disk.items)) return;
+  tasksStamp(); const before=notesSig(); tasksAdoptMem(tasksMerge(state.tasks, disk)); if(notesSig()!==before) tasksRefreshUI(); }, 40); }
+// a text field where he is editing a note (the edit dialog, the journal dialog, anything but the chat box, whose draft renderNotesPane already keeps)
+function tasksEditing(){ const ae=document.activeElement; if(!ae || !/^(INPUT|TEXTAREA)$/.test(ae.tagName) || ae.id==='chatIn') return false; return !!(ae.closest && (ae.closest('#modal') || ae.closest('#notesBody') || ae.closest('#pageBody'))); }
+function tasksRefreshUI(){ clearTimeout(TASK_UI_T); TASK_UI_T=setTimeout(()=>{
+  if(tasksEditing()){ if(!TASK_UI_WAIT){ TASK_UI_WAIT=true; const h=()=>{ document.removeEventListener('focusout',h,true); setTimeout(()=>{ TASK_UI_WAIT=false; tasksRefreshUI(); },80); }; document.addEventListener('focusout',h,true); } return; }
+  try{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(true); const top=[...LAYERS].reverse().find(l=>l.kind==='page'); if($('#page').classList.contains('open') && top && top.data && top.data.kind==='journal' && !$('#modal').classList.contains('on')) renderPage('journal'); }catch(e){ console.warn('notes refresh',e); } }, 30); }
+async function tasksPush(){ const rows=await api.get("settings?select=value&key=eq.tasks"); const remote=rows[0]&&rows[0].value; tasksStamp(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); await api.post('settings',[{key:'tasks', value:state.tasks}],'resolution=merge-duplicates,return=minimal'); }
+async function tasksPull(){ if(!state.online) return; try{ const rows=await api.get("settings?select=value&key=eq.tasks"); const remote=rows[0]&&rows[0].value; if(!remote) return; tasksStamp(); const before=notesSig(); const merged=tasksMerge(state.tasks, remote); tasksAdopt(merged); if(tasksSig(state.tasks)!==tasksSig(remote)) enqueueOnce({t:'tasks.sync'}); if(notesSig()!==before) tasksRefreshUI(); }catch(e){ console.warn('tasks pull',e); } }
 function enqueueOnce(op){ if(state.queue.some(x=>x.t===op.t)) return; enqueue(op); }
 function tasksSave(){ state.tasks.updated=Date.now(); tasksStamp(); persist(); enqueueOnce({t:'tasks.sync'}); updateChatBadge(); try{ PAGER.notesSig=notesSig(); }catch(e){} }
+TASK_SNAP=tasksSnapOf(tasksList()); try{ localStorage.removeItem('iron.tasksSnap'); }catch(e){}
+try{ if('BroadcastChannel' in window){ TASK_BC=new BroadcastChannel('iron-tasks'); TASK_BC.onmessage=()=>tasksOnRemote(); } }catch(e){ TASK_BC=null; }
+window.addEventListener('storage', e=>{ if(e.key==='iron.tasks' || e.key===null) tasksOnRemote(); });
 function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at); }
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }

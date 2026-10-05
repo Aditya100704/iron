@@ -1092,6 +1092,8 @@ function pageNotes(B,T,A){
   [...B.querySelectorAll('[data-jump]')].forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
   const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight;
 }
+// v8.7: right-click a note (browser) copies its text; the phone's long-press menu is unchanged
+document.addEventListener('contextmenu', e=>{ if(isNative()) return; const el=e.target.closest && e.target.closest('[data-tid]'); if(!el) return; const t=tasksList().find(x=>x.id===el.dataset.tid); if(!t || !t.text) return; e.preventDefault(); const done=()=>{ toast('Copied'); buzz && buzz(); }; if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t.text).then(done).catch(()=>{ const a=document.createElement('textarea'); a.value=t.text; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); done(); }catch(err){ toast('Could not copy'); } a.remove(); }); });
 function notesKeep(B,T,A){ const P=$('#chatScroll'); const y=P?P.scrollTop:0; pageNotes(B,T,A); const P2=$('#chatScroll'); if(P2) P2.scrollTop=y; }
 function toggleTask(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;

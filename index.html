@@ -1352,6 +1352,10 @@ function renderRest(D, today, days){
 function fitName(){ const el=$('#dayName'); if(!el) return; let s=46; el.style.fontSize=s+'px'; while(el.scrollWidth>el.clientWidth+1 && s>18){ s-=1; el.style.fontSize=s+'px'; } }
 function centerStrip(id){ const st=$(id||'#dateStrip'); const sel=st&&st.querySelector('.sel'); if(sel) st.scrollLeft = sel.offsetLeft - st.clientWidth/2 + sel.offsetWidth/2; }
 window.addEventListener('resize', ()=>fitName());
+// v9.0: when the phone keyboard closes (back button), drop focus so nothing can bring it back up
+const KB={full:Math.max(window.innerHeight,(window.visualViewport&&window.visualViewport.height)||0), last:window.innerHeight};
+const kbOpen=()=>{ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight; return h < KB.full-120; };
+(function(){ const onRs=()=>{ const h=(window.visualViewport&&window.visualViewport.height)||window.innerHeight; if(h>KB.full) KB.full=h; const grew=h-KB.last; KB.last=h; if(grew>100 && !kbOpen() && !FINE_PTR()){ const ae=document.activeElement; if(ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName)) ae.blur(); } }; (window.visualViewport||window).addEventListener('resize', onRs); window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ KB.full=(window.visualViewport&&window.visualViewport.height)||window.innerHeight; KB.last=KB.full; },400); }); })();
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>fitName());
 function dateStrip(D, doneDates){
   // From a week before today to a week after: just M T W T F S S. Outside that window: the date.
@@ -1618,7 +1622,7 @@ function renderNotesPane(force){ if(!renderNotesPane.t || Date.now()-renderNotes
   if(!force && PAGER.notesRendered && PAGER.notesSig===sig && $('#chat')) return;
   const old=$('#chatIn'); const draft=old?old.value:''; const hadFocus=old && document.activeElement===old; const ch=$('#chatScroll')||$('#chat'); /* v8.4: the scroller is #chatScroll, not #chat — measuring #chat always read 'at bottom', so ticking a note jumped to the newest */ const atBottom=!ch || (ch.scrollHeight-ch.scrollTop-ch.clientHeight<40); const y=ch?ch.scrollTop:0;
   if(!atBottom) notesAnchorSave(); else NOTES_ANCHOR.id=null; pageNotes(B, null, A); PAGER.notesRendered=true; PAGER.notesSig=sig; paintSentChip();
-  const ta=$('#chatIn'); if(ta && draft){ ta.value=draft; ta.dispatchEvent(new Event('input')); } if(ta && hadFocus){ NOTES_REFOCUS=true; try{ ta.focus({preventScroll:true}); } finally { NOTES_REFOCUS=false; } } const c2=$('#chatScroll')||$('#chat'); if(c2 && !atBottom){ c2.scrollTop=y; notesAnchorApply(); requestAnimationFrame(notesAnchorApply); } }
+  const ta=$('#chatIn'); if(ta && draft){ ta.value=draft; ta.dispatchEvent(new Event('input')); } if(ta && hadFocus && (FINE_PTR() || kbOpen())){ NOTES_REFOCUS=true; /* v9.0: never re-open a keyboard the user just closed */ try{ ta.focus({preventScroll:true}); } finally { NOTES_REFOCUS=false; } } const c2=$('#chatScroll')||$('#chat'); if(c2 && !atBottom){ c2.scrollTop=y; notesAnchorApply(); requestAnimationFrame(notesAnchorApply); } }
 const PANE_NAMES=['notes','workout','vision'];
 (function(){ const P=$('#pad'); if(!P) return; let t=null; const typing=el=>el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA') && !el.readOnly; P.addEventListener('focusin', e=>{ if(typing(e.target)){ clearTimeout(t); P.classList.add('kb'); } }); P.addEventListener('focusout', ()=>{ clearTimeout(t); t=setTimeout(()=>{ if(!typing(document.activeElement) || !P.contains(document.activeElement)) P.classList.remove('kb'); }, 200); }); })();
 (function(){ const pw=$('#paneWork'); if(!pw) return; let t=null; pw.addEventListener('scroll', ()=>{ clearTimeout(t); t=setTimeout(()=>{ LS.set('workScroll', {d:todayISO(), y:pw.scrollTop}); }, 250); }, {passive:true}); })();

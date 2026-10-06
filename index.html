@@ -627,6 +627,10 @@ async function fullSync(){
 /* v8.9: one flush at a time, strictly in order (an insert always lands before its edit/delete); a failed op stops the run and stays at the head of the queue */
 let FLUSHING=null, FLUSH_AGAIN=false;
 function flushQueue(){ if(FLUSHING){ FLUSH_AGAIN=true; return FLUSHING; } FLUSHING=(async()=>{ try{ do{ FLUSH_AGAIN=false; if(!(await flushRun())) break; }while(FLUSH_AGAIN && state.queue.length); } finally { FLUSHING=null; } })(); return FLUSHING; }
+/* v9.3: a bulk upsert must have the same keys in every row (PostgREST PGRST102 "All object keys must match"). Health Connect days carry different fields, so rows are sent in groups of identical key sets; a missing field is never sent as null, so it can't wipe a value already stored */
+async function postGrouped(table, rows){ const g={}; (rows||[]).forEach(r=>{ const k=Object.keys(r).sort().join(','); (g[k]=g[k]||[]).push(r); }); for(const k in g) await api.post(table, g[k], 'resolution=merge-duplicates,return=minimal'); }
+/* v9.3: changes that nothing else depends on (phone health data, settings, notes) never hold up the workout queue: if one fails, it waits and the rest go on */
+const INDEPENDENT = t => /^health\./.test(t) || t==='setting.upsert' || t==='tasks.sync' || t==='note.read';
 async function flushOp(op){
   if(op.t==='set.insert') await api.post('sets',[op.row]);
   else if(op.t==='set.delete') await api.del('sets','id=eq.'+op.id);
@@ -647,18 +651,20 @@ async function flushOp(op){
   else if(op.t==='meal.delete') await api.del('meals','id=eq.'+op.id);
   else if(op.t==='food.upsert') await api.post('food_items',[op.row],'resolution=merge-duplicates,return=minimal');
   else if(op.t==='body.upsert') await api.post('body_metrics',[op.row],'resolution=merge-duplicates,return=minimal');
-  else if(op.t==='health.daily') await api.post('health_daily',op.rows,'resolution=merge-duplicates,return=minimal');
-  else if(op.t==='health.session') await api.post('health_sessions',op.rows,'resolution=merge-duplicates,return=minimal');
+  else if(op.t==='health.daily') await postGrouped('health_daily',op.rows);
+  else if(op.t==='health.session') await postGrouped('health_sessions',op.rows);
 }
 async function flushRun(){
-  while(state.queue.length){ const op=state.queue[0];
+  let i0=0, ok=true;
+  while(i0<state.queue.length){ const op=state.queue[i0];
     try{ await flushOp(op); }
     catch(e){ if(!(/\.insert$/.test(op.t) && isDup(e))){ console.warn('queue op failed', op.t, e); try{ LS.set('syncErr',{t:op.t, status:e&&e.status||null, name:e&&e.name||'', msg:String(e&&e.message||e).slice(0,400), tries:op.tries||0, queue:state.queue.length, bytes:JSON.stringify(op).length, at:new Date().toISOString(), v:(typeof APP_V!=='undefined'?APP_V:'')}); }catch(_){}
       /* a request the server keeps refusing (4xx, not auth/timeout/rate) would block everything behind it: after 5 refusals it is parked in iron.deadq */
       if(e && e.status>=400 && e.status<500 && ![401,408,429].includes(e.status) && (op.tries=(op.tries||0)+1)>=5){ const dq=LS.get('deadq',[]); dq.push({...op, err:String(e.message||'').slice(0,200), at:Date.now()}); LS.set('deadq',dq.slice(-50)); toast('A change was refused by the server and set aside'); }
+      else if(INDEPENDENT(op.t)){ persist(); ok=false; i0++; continue; }
       else { persist(); return false; } } }
     const i=state.queue.indexOf(op); if(i>=0) state.queue.splice(i,1); persist(); }
-  return true;
+  return ok;
 }
 /* v9.2: tap the status pill while changes are waiting: the failing change and the server's exact answer go to the coach inbox, so a stuck queue can be diagnosed without touching the phone */
 async function sendSyncReport(){ const err=LS.get('syncErr',null); const head=state.queue[0]; const types={}; state.queue.forEach(o=>{ types[o.t]=(types[o.t]||0)+1; });

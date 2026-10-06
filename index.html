@@ -488,7 +488,7 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
   <header class="top">
     <div class="brand"><b>IRON</b> · SHANKAR</div>
     <nav class="panetabs" id="paneTabs" aria-label="Panes"><button type="button" data-pane="0">Notes</button><button type="button" data-pane="1">Workout</button><button type="button" data-pane="2">Vision</button></nav>
-    <div class="status" id="status"><span class="dot"></span><span id="statusTxt">loading</span></div>
+    <div class="status" id="status" onclick="if(state.queue.length) sendSyncReport()"><span class="dot"></span><span id="statusTxt">loading</span></div>
   </header>
   <div id="pager"><div class="track" id="ptrack"><section class="pane" id="paneNotes"><div class="panehead"><h2>Notes</h2><span style="display:flex;gap:8px;align-items:center"><button class="act hidden" id="sentBtn">Sent 0</button><button class="act hidden" id="notesAct"></button></span></div><div class="panebody" id="notesBody"></div></section><section class="pane" id="paneWork"><main id="main"></main></section><section class="pane" id="paneVision"><div class="panehead"><h2>Vision</h2><button class="act" id="visionAct">+ Line</button></div><div class="panebody" id="visionBody"></div></section></div></div>
 </div>
@@ -653,13 +653,17 @@ async function flushOp(op){
 async function flushRun(){
   while(state.queue.length){ const op=state.queue[0];
     try{ await flushOp(op); }
-    catch(e){ if(!(/\.insert$/.test(op.t) && isDup(e))){ console.warn('queue op failed', op.t, e);
+    catch(e){ if(!(/\.insert$/.test(op.t) && isDup(e))){ console.warn('queue op failed', op.t, e); try{ LS.set('syncErr',{t:op.t, status:e&&e.status||null, name:e&&e.name||'', msg:String(e&&e.message||e).slice(0,400), tries:op.tries||0, queue:state.queue.length, bytes:JSON.stringify(op).length, at:new Date().toISOString(), v:(typeof APP_V!=='undefined'?APP_V:'')}); }catch(_){}
       /* a request the server keeps refusing (4xx, not auth/timeout/rate) would block everything behind it: after 5 refusals it is parked in iron.deadq */
       if(e && e.status>=400 && e.status<500 && ![401,408,429].includes(e.status) && (op.tries=(op.tries||0)+1)>=5){ const dq=LS.get('deadq',[]); dq.push({...op, err:String(e.message||'').slice(0,200), at:Date.now()}); LS.set('deadq',dq.slice(-50)); toast('A change was refused by the server and set aside'); }
       else { persist(); return false; } } }
     const i=state.queue.indexOf(op); if(i>=0) state.queue.splice(i,1); persist(); }
   return true;
 }
+/* v9.2: tap the status pill while changes are waiting: the failing change and the server's exact answer go to the coach inbox, so a stuck queue can be diagnosed without touching the phone */
+async function sendSyncReport(){ const err=LS.get('syncErr',null); const head=state.queue[0]; const types={}; state.queue.forEach(o=>{ types[o.t]=(types[o.t]||0)+1; });
+  const rep={what:'IRON sync report', pending:state.queue.length, online:navigator.onLine, types, lastError:err, head:head?{t:head.t, tries:head.tries||0, bytes:JSON.stringify(head).length, keys:head.row?Object.keys(head.row):null, id:head.id||(head.row&&head.row.id)||null}:null, ua:navigator.userAgent.slice(0,120)};
+  try{ await api.post('inbox',[{kind:'text', text:JSON.stringify(rep,null,1), note:'sync report'}]); toast('Sync report sent to the coach'); }catch(e){ toast('Could not send the report: '+String(e&&e.message||e).slice(0,80), true); } }
 function queueStatus(){ setStatus(state.queue.length?(state.online?'busy':'off'):'ok', state.queue.length?state.queue.length+' pending':'synced'); }
 // v8.9: re-apply local changes (still queued, or made while fullSync was downloading) on top of a fresh server list, so a sync never resurrects a deleted set or reverts an edit
 function applyPending(kind, list){ const ops=[...new Set([...(state.syncOps||[]), ...state.queue])]; for(const op of ops){ if(op.t===kind+'.delete'){ const i=list.findIndex(x=>x.id===op.id); if(i>=0) list.splice(i,1); } else if(op.t===kind+'.update'){ const x=list.find(y=>y.id===op.id); if(x) Object.assign(x, op.body); } else if(op.t===kind+'.insert' && !list.some(x=>x.id===op.row.id) && !ops.some(o=>o.t===kind+'.delete' && o.id===op.row.id)) list.push(kind==='set'?{...op.row,_local:true}:{...op.row}); } return list; }

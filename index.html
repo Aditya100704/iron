@@ -520,6 +520,7 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
     <button data-page="photos"><span class="ic">◉</span><span class="t">Photos</span><span class="s">Progress pics, one tap</span></button>
     <button data-page="exercises"><span class="ic">◇</span><span class="t">Exercises</span><span class="s">Library, units, bests</span></button>
     <button data-page="journal"><span class="ic">✍</span><span class="t">Journal</span><span class="s">Thoughts, filed for the coach</span></button>
+    <button data-page="later"><span class="ic">⏳</span><span class="t">Later</span><span class="s">Not-now tasks, out of your open count</span></button>
     <button data-page="speak"><span class="ic">♪</span><span class="t">Read aloud</span><span class="s">Paste anything, hear it in a real voice</span></button>
     <button data-page="charts"><span class="ic">▲</span><span class="t">Progress</span><span class="s">Volume, e1RM, PRs</span></button>
     <button data-page="history"><span class="ic">▤</span><span class="t">History</span><span class="s">Every session, every set</span></button>
@@ -967,7 +968,7 @@ function tasksList(){ state.tasks=state.tasks||{items:[],updated:0,lineIdx:0}; i
 // 'iron-tasks', with the 'storage' event as fallback), which merge it into memory and re-render — they never write back, so nothing ping-pongs.
 var TASK_SNAP=null, TASK_BC=null, TASK_UI_T=null, TASK_UI_WAIT=false, TASK_UI_H=null, TASK_RX_T=null, NOTES_REFOCUS=false;
 const FINE_PTR = () => { try{ return matchMedia('(hover:hover) and (pointer:fine)').matches; }catch(e){ return false; } };
-const taskKey = t => JSON.stringify([t.text,t.kind,t.done_at||0,t.shine||0,t.img||0,t.journaled_at||0,t.created_at||0]);
+const taskKey = t => JSON.stringify([t.text,t.kind,t.done_at||0,t.shine||0,t.img||0,t.journaled_at||0,t.created_at||0,t.later_at||0]);
 function tasksSnapOf(items){ const s={}; for(const t of (items||[])) s[t.id]=taskKey(t); return s; }
 function tasksSig(o){ return JSON.stringify(((o&&o.items)||[]).map(t=>[t.id, t.mod||0, taskKey(t)])); }
 function tasksStamp(){ const now=Date.now(); if(!TASK_SNAP) TASK_SNAP=tasksSnapOf(tasksList()); const snap=TASK_SNAP; const items=tasksList(); const ids=new Set(); state.tasks.deleted=state.tasks.deleted||{};
@@ -1006,7 +1007,8 @@ function tasksSave(){ state.tasks.updated=Date.now(); tasksStamp(); persist(); e
 TASK_SNAP=tasksSnapOf(tasksList()); try{ localStorage.removeItem('iron.tasksSnap'); }catch(e){}
 try{ if('BroadcastChannel' in window){ TASK_BC=new BroadcastChannel('iron-tasks'); TASK_BC.onmessage=()=>tasksOnRemote(); } }catch(e){ TASK_BC=null; }
 window.addEventListener('storage', e=>{ if(e.key==='iron.tasks' || e.key===null) tasksOnRemote(); });
-function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at); }
+function openTasks(){ return tasksList().filter(t=>t.kind==='task' && !t.done_at && !t.later_at); } /* v9.4: tasks moved to Later don't count as open */
+const laterItems = () => tasksList().filter(t=>t.later_at && !t.done_at && t.kind!=='journal');
 function updateChatBadge(){ const b=$('#chatBadge'); if(!b) return; const n=openTasks().length; b.textContent=n; b.hidden=!n; }
 function shineLine(){ const i=(state.tasks.lineIdx||0)%SHINE.length; state.tasks.lineIdx=i+1; return SHINE[i]; }
 const DOG_SVG=`<svg viewBox="0 0 120 120" width="150" height="150" aria-hidden="true">
@@ -1076,14 +1078,14 @@ function pageSent(B,T,A){ T.textContent='Sent to the coach'; A.textContent='Refr
   const when=t=>new Date(t).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   B.innerHTML=`<div class="empty" style="text-align:left;padding:0 0 12px">Everything you shared with “To the coach” that is still in the coach’s inbox. The coach deletes each item once the work is done, and it disappears from here.</div>`+(items.length?`<div class="sentgrid">${items.map(it=>`<div class="sentcard" data-sid="${it.id}">${it.kind==='image'?`<img data-simg="${it.id}" alt="">`:`<div class="stext">${esc(it.text||'')}</div>`}<div class="smeta"><span>${when(it.created_at)}</span><span class="${it.seen_at?'ok':'wait'}">${it.seen_at?'seen by the coach':'waiting'}</span></div>${it.note?`<div class="snote">${esc(it.note)}</div>`:''}</div>`).join('')}</div>`:'<div class="empty">Nothing waiting. The coach has cleared everything you sent.</div>');
   $$('#pageBody img[data-simg]').forEach(async im=>{ const id=im.dataset.simg; try{ if(!SENT_SRC[id]){ const r=await api.get('inbox?select=data_b64,mime&id=eq.'+id); if(r[0]&&r[0].data_b64) SENT_SRC[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; } if(SENT_SRC[id]){ im.src=SENT_SRC[id]; im.onclick=()=>viewTaskImg(SENT_SRC[id]); } }catch(e){} }); }
-function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); paintSentChip(); } }
+function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="lLink">later <b>${laterItems().length}</b> ›</button><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); const l=$('#lLink'); if(l) l.onclick=()=>openPage('later'); paintSentChip(); } }
 function pageNotes(B,T,A){
-  if(T) T.textContent='Notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  if(T) T.textContent='Notes'; B.dataset.view='notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
   const D=todayISO(); const doneToday=items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
   A.textContent=showOpen?'All':'Open only'; A.className='act'; A.onclick=()=>{ state.settings.notesOpenOnly=!showOpen; persist(); if(B.id==='notesBody') renderNotesPane(true); else pageNotes(B,T,A); }; /* v8.9: through renderNotesPane so the draft and the scroll survive */
-  const shown=(showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items).filter(t=>t.kind!=='journal'); const jn=items.filter(t=>t.kind==='journal').length;
+  const shown=(showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items).filter(t=>t.kind!=='journal' && !(t.later_at && !t.done_at)); /* v9.4: Later items live on their own page */ const jn=items.filter(t=>t.kind==='journal').length;
   const older=open.filter(t=>t.created_at.slice(0,10)<D);
-  let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="jLink">journal <b>${jn}</b> ›</button></div>`;
+  let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="lLink">later <b>${laterItems().length}</b> ›</button><button class="jlink" id="jLink">journal <b>${jn}</b> ›</button></div>`;
   if(older.length && !showOpen) html+=`<div class="chat"><div class="pin">${older.map(t=>`<button class="p" data-jump="${t.id}"><b>${new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</b>${esc(t.text)}</button>`).join('')}</div></div>`;
   html+='<div class="chat" id="chat">';
   let lastDay=''; shown.forEach(t=>{ const d=t.created_at.slice(0,10); if(d!==lastDay){ lastDay=d; html+=`<div class="day" data-d="${d}">${d===D?'Today':new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>`; }
@@ -1111,7 +1113,7 @@ function pageNotes(B,T,A){
   ta.addEventListener('paste', e=>{ const cd=e.clipboardData; if(!cd) return; if((cd.getData('text/plain')||'').length) return; /* v8.9: text on the clipboard = a text paste, even if an image rides along */ const it=[...(cd.items||[])].find(i=>i.kind==='file' && /^image\//.test(i.type)); if(!it) return; e.preventDefault(); attachFile(it.getAsFile()); });
   $('#chatFile').onchange=e=>{ const f=e.target.files && e.target.files[0]; if(f) attachFile(f); };
   showAtt();
-  let holdT=null, held=false, sawPtr=false; sb.onpointerdown=e=>{ e.preventDefault(); sawPtr=true; held=false; clearTimeout(holdT); holdT=setTimeout(()=>{ held=true; buzz('double'); send('journal'); }, 550); }; const rel=()=>{ clearTimeout(holdT); if(!held){ send(); } held=false; }; sb.onpointerup=rel; sb.onpointercancel=()=>{ clearTimeout(holdT); held=false; }; sb.onpointerleave=()=>{ clearTimeout(holdT); }; sb.onclick=e=>{ e.preventDefault(); if(!sawPtr) send(); sawPtr=false; }; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal');
+  let holdT=null, held=false, sawPtr=false; sb.onpointerdown=e=>{ e.preventDefault(); sawPtr=true; held=false; clearTimeout(holdT); holdT=setTimeout(()=>{ held=true; buzz('double'); send('journal'); }, 550); }; const rel=()=>{ clearTimeout(holdT); if(!held){ send(); } held=false; }; sb.onpointerup=rel; sb.onpointercancel=()=>{ clearTimeout(holdT); held=false; }; sb.onpointerleave=()=>{ clearTimeout(holdT); }; sb.onclick=e=>{ e.preventDefault(); if(!sawPtr) send(); sawPtr=false; }; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal'); const ll=$('#lLink'); if(ll) ll.onclick=()=>openPage('later');
   // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
@@ -1145,7 +1147,7 @@ document.addEventListener('contextmenu', e=>{ if(isNative()) return; if((e.point
 const NOTES_ANCHOR={id:null, off:0, until:0};
 function notesAnchorSave(){ const P=$('#chatScroll'); if(!P) return; const pt=P.getBoundingClientRect().top; const el=[...P.querySelectorAll('[data-tid]')].find(e=>e.getBoundingClientRect().bottom>pt+4); NOTES_ANCHOR.id=el?el.dataset.tid:null; NOTES_ANCHOR.off=el?el.getBoundingClientRect().top-pt:0; NOTES_ANCHOR.until=Date.now()+4000; }
 function notesAnchorApply(){ if(!NOTES_ANCHOR.id || Date.now()>NOTES_ANCHOR.until) return; const P=$('#chatScroll'); if(!P) return; const el=P.querySelector('[data-tid="'+NOTES_ANCHOR.id+'"]'); if(!el) return; const d=(el.getBoundingClientRect().top-P.getBoundingClientRect().top)-NOTES_ANCHOR.off; if(Math.abs(d)>1) P.scrollTop+=d; }
-function notesKeep(B,T,A){ const P=$('#chatScroll'); const y=P?P.scrollTop:0; pageNotes(B,T,A); const P2=$('#chatScroll'); if(P2) P2.scrollTop=y; }
+function notesKeep(B,T,A){ if(B && B.dataset.view==='later'){ pageLater(B,T,A); return; } const P=$('#chatScroll'); const y=P?P.scrollTop:0; pageNotes(B,T,A); const P2=$('#chatScroll'); if(P2) P2.scrollTop=y; }
 function toggleTask(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return;
   const el=$('#t-'+id); const inPlace=!!el; /* always in place, in both views: the screen never moves when a task is ticked; in Open-only the ticked one leaves on the next visit */
@@ -1160,7 +1162,7 @@ function toggleTask(id, B,T,A){
 function taskMenu(id, B,T,A){
   const t=tasksList().find(x=>x.id===id); if(!t) return; const orig=t.text; /* v8.9: Save writes only if he changed the text, so a stale dialog never overwrites a newer edit from another device */
   modal(t.kind==='task'?'Task':'Note', `<div class="form"><label>Text<textarea id="tkTx">${esc(t.text)}</textarea></label></div>`,
-    [{t:'Delete',red:true,fn:()=>{ if(t.img) enqueue({t:'photo.delete', id:t.img}); state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); notesKeep(B,T,A); }},{t:'Journal',fn:()=>{ t.kind='journal'; t.done_at=null; t.shine=null; t.journaled_at=new Date().toISOString(); tasksSave(); const el=$('#t-'+id); if(el){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); el.remove(); } notesStat(); toast('Filed to the journal. The coach reads it.', true); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); notesKeep(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v && v!==orig.trim()){ t.text=v; tasksSave(); } notesKeep(B,T,A); }}]);
+    [{t:'Delete',red:true,fn:()=>{ if(t.img) enqueue({t:'photo.delete', id:t.img}); state.tasks.items=tasksList().filter(x=>x.id!==id); tasksSave(); notesKeep(B,T,A); }},{t:'Journal',fn:()=>{ t.kind='journal'; t.done_at=null; t.shine=null; t.journaled_at=new Date().toISOString(); tasksSave(); const el=$('#t-'+id); if(el){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); el.remove(); } notesStat(); toast('Filed to the journal. The coach reads it.', true); }},{t:t.later_at?'Back to now':'For later',fn:()=>{ if(t.later_at){ delete t.later_at; toast('Back in your notes'); } else { t.later_at=new Date().toISOString(); toast('Moved to Later'); } tasksSave(); notesKeep(B,T,A); notesStat(); }},{t:t.kind==='task'?'Make note':'Make task',fn:()=>{ t.kind=t.kind==='task'?'note':'task'; if(t.kind==='note'){ t.done_at=null; t.shine=null; } tasksSave(); notesKeep(B,T,A); }},{t:'Save',gold:true,fn:()=>{ const v=$('#tkTx').value.trim(); if(v && v!==orig.trim()){ t.text=v; tasksSave(); } notesKeep(B,T,A); }}]);
 }
 /* ---- Read aloud: Microsoft's neural voices, streamed chunk by chunk through the native IronTts plugin (nothing is saved as a file) ---- */
 const SPEAK_VOICES=[['en-US-AndrewNeural','Andrew · US, warm'],['en-US-BrianNeural','Brian · US, casual'],['en-US-ChristopherNeural','Christopher · US, deep'],['en-US-GuyNeural','Guy · US, newsreader'],['en-US-AvaNeural','Ava · US, female'],['en-US-EmmaNeural','Emma · US, female'],['en-GB-RyanNeural','Ryan · British'],['en-GB-SoniaNeural','Sonia · British, female'],['en-IN-PrabhatNeural','Prabhat · Indian'],['en-IN-NeerjaNeural','Neerja · Indian, female'],['en-AU-WilliamNeural','William · Australian']];
@@ -1193,6 +1195,13 @@ function pageSpeak(B,T,A){ if(T) T.textContent='Read aloud'; if(A){ A.textConten
   $('#spkPlay').onclick=()=>{ if(SPK.playing){ SPK.playing=false; if(SPK.el) SPK.el.pause(); spkPaint(); return; } if(SPK.el && SPK.i<SPK.chunks.length && SPK.el.paused && SPK.el.currentTime>0 && !SPK.el.ended){ SPK.playing=true; SPK.el.playbackRate=spkSpeed(); SPK.el.play().catch(()=>{}); spkPaint(); return; }
     const text=spkStrip(ta.value).trim(); if(!text){ toast('Nothing to read'); return; } spkStop(); SPK.chunks=spkChunks(text); spkPlayFrom(0); };
   $('#spkStopB').onclick=spkStop; spkPaint(); }
+/* v9.4: "For later": tasks and notes that matter but not now. Out of the open count and the main list; ticked or sent back from here */
+function pageLater(B,T,A){
+  T.textContent='Later'; B.dataset.view='later'; A.className='act hidden';
+  const items=laterItems().sort((a,b)=>(a.later_at||'').localeCompare(b.later_at||''));
+  B.innerHTML=`<div class="empty" style="text-align:left;padding:0 0 12px">Not-now tasks and notes. They stay out of your open count. Tap one to send it back to Notes, edit it, or tick it off from here.</div><div class="chat" id="laterList">${items.map(bubbleHTML).join('')||'<div class="empty">Nothing parked. Tap any note and choose For later.</div>'}</div>`;
+  [...B.querySelectorAll('[data-tid]')].forEach(el=>bindBubble(el,B,T,A));
+}
 function pageJournal(B,T,A){
   T.textContent='Journal'; A.textContent='+ Entry'; A.className='act'; A.onclick=()=>{ modal('Journal entry', `<div class="form"><label>What is on your mind<textarea id="jTx" style="min-height:140px" placeholder="Raw. No audience."></textarea></label></div>`, [{t:'Cancel'},{t:'Save',gold:true,fn:()=>{ const v=$('#jTx').value.trim(); if(!v) return; const now=new Date().toISOString(); tasksList().push({id:uid(), text:v, kind:'journal', created_at:now, journaled_at:now, done_at:null}); tasksSave(); pageJournal(B,T,A); }}]); setTimeout(()=>$('#jTx').focus(),100); };
   const es=tasksList().filter(t=>t.kind==='journal').sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
@@ -1631,7 +1640,7 @@ $('#scrim').onclick=()=>closeLayer('sheet');
 $$('#sheet [data-page]').forEach(b=>b.onclick=()=>{ if(b.dataset.page==='notes'){ closeLayer('sheet'); goPane(0); return; } if(b.dataset.page==='vision'){ closeLayer('sheet'); goPane(2); return; } if(b.dataset.page==='workout'){ closeLayer('sheet'); goPane(1); return; } hideSheet(); if(LAYERS.length && LAYERS[LAYERS.length-1].kind==='sheet'){ LAYERS.pop(); openPage(b.dataset.page, null, true); } else openPage(b.dataset.page); });
 $('#pageBack').onclick=()=>closeLayer('page');
 const PAGER={idx:1, notesRendered:false};
-function notesSig(){ return JSON.stringify([todayISO(), !!state.settings.notesOpenOnly, tasksList().map(t=>[t.id,t.text,t.kind,t.done_at||0,t.shine||0,t.img||0])]); }
+function notesSig(){ return JSON.stringify([todayISO(), !!state.settings.notesOpenOnly, tasksList().map(t=>[t.id,t.text,t.kind,t.done_at||0,t.shine||0,t.img||0,t.later_at||0])]); }
 function renderNotesPane(force){ if(!renderNotesPane.t || Date.now()-renderNotesPane.t>20000){ renderNotesPane.t=Date.now(); loadSent(); } const B=$('#notesBody'), A=$('#notesAct'); const sig=notesSig();
   // only rebuild when the notes actually changed — a rebuild mid-typing wipes the draft, drops the keyboard and jumps the scroll
   if(!force && PAGER.notesRendered && PAGER.notesSig===sig && $('#chat')) return;
@@ -1674,7 +1683,7 @@ function openPage(kind, arg, replace){
   renderPage(kind, arg);
 }
 function renderPage(kind, arg){
-  const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden'; $('#chatFab').classList.add('hidden');
+  const P=$('#page'), B=$('#pageBody'), T=$('#pageTitle'), A=$('#pageAct'); A.onclick=null; A.className='act hidden'; B.dataset.view=''; $('#chatFab').classList.add('hidden');
   if(kind==='history') pageHistory(B,T,A);
   else if(kind==='muscle') pageMuscle(B,T,A,arg);
   else if(kind==='charts') pageCharts(B,T,A);
@@ -1683,6 +1692,7 @@ function renderPage(kind, arg){
   else if(kind==='health') pageHealth(B,T,A);
   else if(kind==='notes') pageNotes(B,T,A);
   else if(kind==='journal') pageJournal(B,T,A);
+  else if(kind==='later') pageLater(B,T,A);
   else if(kind==='speak') pageSpeak(B,T,A);
   else if(kind==='sent') pageSent(B,T,A);
   else if(kind==='diet') pageDiet(B,T,A);

@@ -1148,9 +1148,9 @@ document.addEventListener('contextmenu', e=>{ if(isNative()) return; if((e.point
 const NOTES_ANCHOR={id:null, off:0, until:0};
 function notesAnchorSave(){ const P=$('#chatScroll'); if(!P) return; const pt=P.getBoundingClientRect().top; const el=[...P.querySelectorAll('[data-tid]')].find(e=>e.getBoundingClientRect().bottom>pt+4); NOTES_ANCHOR.id=el?el.dataset.tid:null; NOTES_ANCHOR.off=el?el.getBoundingClientRect().top-pt:0; NOTES_ANCHOR.until=Date.now()+4000; }
 function notesAnchorApply(){ if(!NOTES_ANCHOR.id || Date.now()>NOTES_ANCHOR.until) return; const P=$('#chatScroll'); if(!P) return; const el=P.querySelector('[data-tid="'+NOTES_ANCHOR.id+'"]'); if(!el) return; const d=(el.getBoundingClientRect().top-P.getBoundingClientRect().top)-NOTES_ANCHOR.off; if(Math.abs(d)>1) P.scrollTop+=d; }
-function notesKeep(B,T,A){ if(B && B.dataset.view==='later'){ pageLater(B,T,A); return; } const P=$('#chatScroll'); const y=P?P.scrollTop:0; pageNotes(B,T,A); const P2=$('#chatScroll'); if(P2) P2.scrollTop=y; }
+function notesKeep(B,T,A){ if(B && B.dataset.view==='later'){ pageLater(B,T,A); renderNotesPane(true); return; } /* v9.4: a change made on the Later page redraws the Notes pane behind it too */ const P=$('#chatScroll'); const y=P?P.scrollTop:0; pageNotes(B,T,A); const P2=$('#chatScroll'); if(P2) P2.scrollTop=y; }
 function toggleTask(id, B,T,A){
-  const t=tasksList().find(x=>x.id===id); if(!t) return;
+  const t=tasksList().find(x=>x.id===id); if(!t) return; if(B && B.dataset.view==='later') setTimeout(()=>renderNotesPane(true), 0);
   const el=$('#t-'+id); const inPlace=!!el; /* always in place, in both views: the screen never moves when a task is ticked; in Open-only the ticked one leaves on the next visit */
   if(t.done_at){ t.done_at=null; t.shine=null; tasksSave(); if(!inPlace){ notesKeep(B,T,A); return; } const nx=el.nextElementSibling; if(nx && nx.classList.contains('coach')) nx.remove(); const w=document.createElement('div'); w.innerHTML=bubbleHTML(t); el.replaceWith(w.firstElementChild); bindBubble($('#t-'+id),B,T,A); notesStat(); return; }
   t.done_at=new Date().toISOString(); const D=todayISO(); const n=tasksList().filter(x=>x.done_at && isoLocal(x.done_at)===D).length;

@@ -1139,6 +1139,7 @@ function pageNotes(B,T,A){
   [...B.querySelectorAll('[data-tid]')].forEach(el=>el.onclick=e=>{ if(e.target.closest('[data-tick]')) return; taskMenu(el.dataset.tid, B,T,A); });
   [...B.querySelectorAll('[data-jump]')].forEach(b=>b.onclick=()=>{ const el=$('#t-'+b.dataset.jump); if(el && el.scrollIntoView){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.outline='2px solid var(--gold)'; setTimeout(()=>el.style.outline='',1200); } });
   const P=$('#chatScroll')||B.closest('.pane, .page'); if(P) P.scrollTop=P.scrollHeight;
+  if(B.id==='notesBody'){ PAGER.notesRendered=true; PAGER.notesSig=notesSig(); } /* v9.4: a direct redraw records what it drew, so the pane never skips a later change back to an older state */
 }
 // v8.7: right-click a note (browser) copies its text; the phone's long-press menu is unchanged
 let LAST_TOUCH=0; document.addEventListener('touchstart', ()=>{ LAST_TOUCH=Date.now(); }, {passive:true, capture:true});

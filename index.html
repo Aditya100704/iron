@@ -306,6 +306,15 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(214,101,90,.5)}50%{box-shadow:0 0 0 10px rgba(214,101,90,0)}}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
 .chatstat b{color:var(--gold)}
+/* v9.7: the win counts celebrate, the open count steps back */
+.chatstat .win{color:var(--green);font-weight:600}
+.chatstat .win b{color:var(--green);font-size:15px;text-shadow:0 0 10px rgba(61,220,151,.45)}
+.chatstat .win.all b{color:var(--gold);text-shadow:0 0 10px rgba(242,193,78,.4)}
+.chatstat .win.all{color:var(--gold)}
+.chatstat .owe{color:var(--dim)}
+.chatstat .owe b{color:var(--muted);font-weight:500}
+/* v9.7: on the website the stats bar stays pinned at the top of the notes while they scroll */
+html.web .chatscroll > .chatstat{position:sticky;top:0;z-index:6;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--line);align-items:center}
 .chatstat .jlink{margin-left:auto;background:var(--surface);border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--text);font-family:var(--mono);font-size:12px;min-height:0}
 .vctl{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:2px}
 .vctl .sp{display:flex;gap:6px}
@@ -910,6 +919,7 @@ state.health = LS.get('health', {daily:{}, sessions:{}, lastSync:0, granted:fals
 state.tasks = LS.get('tasks', {items:[], updated:0, lineIdx:0});
 state.vision = LS.get('vision', {lines:[], updated:0});
 const isNative = () => !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+document.documentElement.classList.toggle('web', !isNative()); /* v9.7: website-only styling (the pinned notes stats) */
 const HC = () => (isNative() && Capacitor.Plugins && Capacitor.Plugins.HealthConnect) || null;
 const HC_TYPES=['Steps','Distance','ActiveCaloriesBurned','TotalCaloriesBurned','ExerciseSession','SleepSession','HeartRateSeries','RestingHeartRate','HeartRateVariabilityRmssd','OxygenSaturation','Vo2Max','Weight'];
 const EX_KIND={73:'swim',74:'swim',79:'walk',56:'run',57:'run',70:'strength',80:'strength',8:'bike',9:'bike',37:'hike',25:'elliptical',68:'stairs',13:'cardio',36:'hiit',14:'cardio',24:'cardio'};
@@ -1084,14 +1094,14 @@ function pageSent(B,T,A){ T.textContent='Sent to the coach'; A.textContent='Refr
   const when=t=>new Date(t).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   B.innerHTML=`<div class="empty" style="text-align:left;padding:0 0 12px">Everything you shared with “To the coach” that is still in the coach’s inbox. The coach deletes each item once the work is done, and it disappears from here.</div>`+(items.length?`<div class="sentgrid">${items.map(it=>`<div class="sentcard" data-sid="${it.id}">${it.kind==='image'?`<img data-simg="${it.id}" alt="">`:`<div class="stext">${esc(it.text||'')}</div>`}<div class="smeta"><span>${when(it.created_at)}</span><span class="${it.seen_at?'ok':'wait'}">${it.seen_at?'seen by the coach':'waiting'}</span></div>${it.note?`<div class="snote">${esc(it.note)}</div>`:''}</div>`).join('')}</div>`:'<div class="empty">Nothing waiting. The coach has cleared everything you sent.</div>');
   $$('#pageBody img[data-simg]').forEach(async im=>{ const id=im.dataset.simg; try{ if(!SENT_SRC[id]){ const r=await api.get('inbox?select=data_b64,mime&id=eq.'+id); if(r[0]&&r[0].data_b64) SENT_SRC[id]='data:'+(r[0].mime||'image/jpeg')+';base64,'+r[0].data_b64; } if(SENT_SRC[id]){ im.src=SENT_SRC[id]; im.onclick=()=>viewTaskImg(SENT_SRC[id]); } }catch(e){} }); }
-function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span>today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span><b>${openTasks().length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="lLink">later <b>${laterItems().length}</b> ›</button><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); const l=$('#lLink'); if(l) l.onclick=()=>openPage('later'); paintSentChip(); } }
+function notesStat(){ const items=tasksList(); const D=todayISO(); const el=document.querySelector('.chatstat'); if(el){ el.innerHTML=`<span class="win">today <b>${items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length}</b> done</span><span class="win all"><b>${items.filter(t=>t.done_at).length}</b> done all time</span><span class="owe"><b>${openTasks().length}</b> open</span><button class="jlink" id="lLink">later <b>${laterItems().length}</b> ›</button><button class="jlink" id="jLink">journal <b>${items.filter(t=>t.kind==='journal').length}</b> ›</button>`; const j=$('#jLink'); if(j) j.onclick=()=>openPage('journal'); const l=$('#lLink'); if(l) l.onclick=()=>openPage('later'); paintSentChip(); } }
 function pageNotes(B,T,A){
   if(T) T.textContent='Notes'; B.dataset.view='notes'; const items=tasksList().slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
   const D=todayISO(); const doneToday=items.filter(t=>t.done_at && isoLocal(t.done_at)===D).length; const open=openTasks(); const showOpen=state.settings.notesOpenOnly;
   A.textContent=showOpen?'All':'Open only'; A.className='act'; A.onclick=()=>{ state.settings.notesOpenOnly=!showOpen; persist(); if(B.id==='notesBody') renderNotesPane(true); else pageNotes(B,T,A); }; /* v8.9: through renderNotesPane so the draft and the scroll survive */
   const shown=(showOpen?items.filter(t=>t.kind==='task'&&!t.done_at):items).filter(t=>t.kind!=='journal' && !(t.later_at && !t.done_at)); /* v9.4: Later items live on their own page */ const jn=items.filter(t=>t.kind==='journal').length;
   const older=open.filter(t=>t.created_at.slice(0,10)<D);
-  let html=`<div class="chatstat"><span>today <b>${doneToday}</b> done</span><span><b>${open.length}</b> open</span><span>${items.filter(t=>t.done_at).length} done all time</span><button class="jlink" id="lLink">later <b>${laterItems().length}</b> ›</button><button class="jlink" id="jLink">journal <b>${jn}</b> ›</button></div>`;
+  let html=`<div class="chatstat"><span class="win">today <b>${doneToday}</b> done</span><span class="win all"><b>${items.filter(t=>t.done_at).length}</b> done all time</span><span class="owe"><b>${open.length}</b> open</span><button class="jlink" id="lLink">later <b>${laterItems().length}</b> ›</button><button class="jlink" id="jLink">journal <b>${jn}</b> ›</button></div>`;
   if(older.length && !showOpen) html+=`<div class="chat"><div class="pin">${older.map(t=>`<button class="p" data-jump="${t.id}"><b>${new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</b>${esc(t.text)}</button>`).join('')}</div></div>`;
   html+='<div class="chat" id="chat">';
   let lastDay=''; shown.forEach(t=>{ const d=t.created_at.slice(0,10); if(d!==lastDay){ lastDay=d; html+=`<div class="day" data-d="${d}">${d===D?'Today':new Date(d+'T00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</div>`; }

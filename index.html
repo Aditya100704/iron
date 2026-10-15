@@ -1629,9 +1629,9 @@ function alertSettings(){ const a=Object.assign({pattern:'double', pr:'heartbeat
    Pure logic, no DOM: unit-tested by tools/gymapp/test_mic.js. */
 let MIC=null; const MIC_HOLD_MS=300; const MICUI={state:'idle', tick:null, log:[], t0:0};
 /* v9.8.1: the next 5 dictations send their raw mic event trace to the coach (To the coach inbox), so a phone-only bug gets fixed from real data */
-function micTraceSend(why){ let left=5; try{ const v=localStorage.getItem('micTraceLeft2'); left=v==null?5:+v; }catch(e){} if(!(left>0) || !MICUI.log.length) return;
-  try{ localStorage.setItem('micTraceLeft2', String(left-1)); }catch(e){}
-  const rep={app:'IRON mic trace', v:'9.8.2', why, ua:navigator.userAgent.slice(0,80), events:MICUI.log.slice(-250)};
+function micTraceSend(why){ let left=5; try{ const v=localStorage.getItem('micTraceLeft3'); left=v==null?5:+v; }catch(e){} if(!(left>0) || !MICUI.log.length) return;
+  try{ localStorage.setItem('micTraceLeft3', String(left-1)); }catch(e){}
+  const rep={app:'IRON mic trace', v:'9.8.3', why, ua:navigator.userAgent.slice(0,80), events:MICUI.log.slice(-250)};
   api.post('inbox',[{kind:'text', text:JSON.stringify(rep), note:'mic trace'}]).catch(()=>{}); } /* state: idle | hold | locked */
 function micRec(on){ const r=$('#vrec'), l=$('#vlock'), t=$('#vrecT'), h=$('#vrecHint'); clearInterval(MICUI.tick);
   if(!on){ MICUI.state='idle'; if(r) r.hidden=true; if(l) l.hidden=true; return; }
@@ -1680,6 +1680,7 @@ function micSession(SR, ui, opt){
     SR.addListener('partialResults', onPartial);
     SR.addListener('listeningState', d=>{ tr('state',d&&d.status); if(g!==gen || !d) return;
       if(d.status==='ended'){ ended(); return; } /* end of a segmented session */
+      if(d.status==='error'){ tr('error',d.code); if(live){ live=false; ended(); } return; } /* v9.8.3: the patched plugin reports real errors (no match, timeout) for its OWN recogniser only: restart at once */
       if(d.status!=='stopped' || segmented) return; /* inside a segmented session a pause is not the end */
       if(Date.now()-startedAt<opt.staleMs){ tr('stale-stop'); return; } /* the previous session's "stopped", delivered after the restart */
       ended(); });

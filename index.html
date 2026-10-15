@@ -1629,9 +1629,9 @@ function alertSettings(){ const a=Object.assign({pattern:'double', pr:'heartbeat
    Pure logic, no DOM: unit-tested by tools/gymapp/test_mic.js. */
 let MIC=null; const MIC_HOLD_MS=300; const MICUI={state:'idle', tick:null, log:[], t0:0};
 /* v9.8.1: the next 5 dictations send their raw mic event trace to the coach (To the coach inbox), so a phone-only bug gets fixed from real data */
-function micTraceSend(why){ let left=5; try{ const v=localStorage.getItem('micTraceLeft'); left=v==null?5:+v; }catch(e){} if(!(left>0) || !MICUI.log.length) return;
-  try{ localStorage.setItem('micTraceLeft', String(left-1)); }catch(e){}
-  const rep={app:'IRON mic trace', v:'9.8.1', why, ua:navigator.userAgent.slice(0,80), events:MICUI.log.slice(-250)};
+function micTraceSend(why){ let left=5; try{ const v=localStorage.getItem('micTraceLeft2'); left=v==null?5:+v; }catch(e){} if(!(left>0) || !MICUI.log.length) return;
+  try{ localStorage.setItem('micTraceLeft2', String(left-1)); }catch(e){}
+  const rep={app:'IRON mic trace', v:'9.8.2', why, ua:navigator.userAgent.slice(0,80), events:MICUI.log.slice(-250)};
   api.post('inbox',[{kind:'text', text:JSON.stringify(rep), note:'mic trace'}]).catch(()=>{}); } /* state: idle | hold | locked */
 function micRec(on){ const r=$('#vrec'), l=$('#vlock'), t=$('#vrecT'), h=$('#vrecHint'); clearInterval(MICUI.tick);
   if(!on){ MICUI.state='idle'; if(r) r.hidden=true; if(l) l.hidden=true; return; }
@@ -1639,14 +1639,15 @@ function micRec(on){ const r=$('#vrec'), l=$('#vlock'), t=$('#vrecT'), h=$('#vre
   const place=()=>{ const m=$('#chatMic'), cb=$('#chatbar'); if(l && m && cb){ const a=m.getBoundingClientRect(), b=cb.getBoundingClientRect(); if(a.width) l.style.left=Math.max(0,a.left-b.left+a.width/2-20)+'px'; } }; if(l){ l.hidden=false; place(); }
   const t0=Date.now(), upd=()=>{ const s=Math.floor((Date.now()-t0)/1000); if(t) t.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); place(); }; upd(); MICUI.tick=setInterval(upd,500); }
 function micSession(SR, ui, opt){
-  opt=Object.assign({restartMs:700, finalMs:60, graceMs:1500, settleMs:400, pollMs:800, minLiveMs:1200, staleMs:400, quietMs:1500, maxEmpty:4, lang:'en-IN'}, opt||{});
+  opt=Object.assign({restartMs:700, finalMs:250, graceMs:1500, settleMs:400, pollMs:800, minLiveMs:1200, staleMs:400, quietMs:1500, segQuietMs:8000, failCheckMs:900, maxEmpty:4, lang:'en-IN'}, opt||{});
   const norm=x=>(x||'').trim().replace(/\s+/g,' '), fw=x=>(x.split(' ')[0]||'');
   const tr=(e,d)=>{ try{ ui.trace && ui.trace(e,d); }catch(_){} };
   let want=false, hold=false, live=false, base='', cur='', last='', orig='', finT=null, waitFinal=false,
-      restartT=null, graceT=null, pollT=null, startedAt=0, lastP=0, empty=0, gotText=false, gen=0;
+      restartT=null, graceT=null, pollT=null, startedAt=0, lastP=0, empty=0, gotText=false, gen=0, segmented=false, failT=null, fails=0;
   const paint=()=>ui.setText(norm((base?base+' ':'')+cur));
   const commit=()=>{ if(cur){ base=norm((base?base+' ':'')+cur); last=cur; cur=''; } paint(); };
-  const onPartial=d=>{ const m=norm(d&&d.matches&&d.matches[0]); tr('p',m); lastP=Date.now(); if(!want && !graceT) return; if(!m) return;
+  const onPartial=d=>{ const m=norm(d&&d.matches&&d.matches[0]); const seg=!!(d&&d.segment); tr(seg?'seg-result':'p',m); lastP=Date.now(); fails=0;
+    if(seg && (want||graceT)){ segmented=true; if(!m) return; const lm0=m.toLowerCase(); if(!(cur && cur.toLowerCase().startsWith(lm0) && cur.length>m.length)) cur=m; gotText=true; commit(); return; } /* v9.8.2: a finished sentence of a segmented session (the patched plugin): commit it as is */ if(!want && !graceT) return; if(!m) return;
     const lm=m.toLowerCase(), lc=cur.toLowerCase(), ll=last.toLowerCase();
     if(!cur && last){
       if(ll.startsWith(lm)) return;                                                     /* a stale repeat of what's already committed */
@@ -1659,24 +1660,27 @@ function micSession(SR, ui, opt){
     if(m.length>=cur.length || !want || !lc2.startsWith(lm)) cur=m; gotText=true; paint();
     if(want && waitFinal && restartT){ waitFinal=false; clearTimeout(restartT); restartT=setTimeout(restart, opt.finalMs); } /* the final landed: restart now */
     if(!want && graceT && finT){ clearTimeout(graceT); graceT=setTimeout(finT, opt.settleMs); } };
-  const start=async()=>{ gotText=false; live=true; startedAt=lastP=Date.now(); tr('start');
+  const start=async()=>{ gotText=false; live=true; startedAt=lastP=Date.now(); tr('start'); clearTimeout(failT);
+    const g0=gen; failT=setTimeout(async()=>{ if(g0!==gen || !want || !live || restartT || lastP>startedAt) return; try{ const r=await SR.isListening(); if(g0===gen && want && live && !restartT && lastP<=startedAt && r && r.listening===false){ tr('start-failed'); if(++fails<=3){ live=false; start(); } else ended(); } }catch(e){} }, opt.failCheckMs); /* v9.8.2: a dead start (speech service busy) is retried at once, not after the silence watchdog */
     try{ await SR.start({language:opt.lang, maxResults:1, partialResults:true, popup:false}); }catch(e){ tr('err',String(e&&e.message||e)); ended(); } };
   function restart(){ restartT=null; commit(); if(!want) return;
     if(gotText) empty=0; else if(!hold && ++empty>=opt.maxEmpty){ stop('silence'); return; }
     start(); }
   const ended=()=>{ live=false; tr('ended'); if(!want || restartT) return; waitFinal=true; restartT=setTimeout(restart, opt.restartMs); };
   const poll=async()=>{ const g=gen; if(!want) return;
-    if(live && !restartT && Date.now()-startedAt>=opt.minLiveMs){ try{ const r=await SR.isListening(); if(g===gen && want && live && !restartT && r && r.listening===false && Date.now()-lastP>=opt.quietMs){ tr('silent'); ended(); } /* not listening AND no words for a while: a stale 'stopped' also flips the flag */ }catch(e){} }
+    if(live && !restartT && Date.now()-startedAt>=opt.minLiveMs){ try{ const r=await SR.isListening(); if(g===gen && want && live && !restartT && r && r.listening===false && Date.now()-lastP>=(segmented?opt.segQuietMs:opt.quietMs)){ tr('silent'); ended(); } /* not listening AND no words for a while: a stale 'stopped' also flips the flag */ }catch(e){} }
     if(g===gen && want) pollT=setTimeout(poll, opt.pollMs); };
-  const clear=()=>{ clearTimeout(restartT); restartT=null; clearTimeout(pollT); pollT=null; waitFinal=false; };
+  const clear=()=>{ clearTimeout(restartT); restartT=null; clearTimeout(pollT); pollT=null; clearTimeout(failT); failT=null; waitFinal=false; };
   async function begin(isHold){ if(want) return; if(graceT && finT){ clearTimeout(graceT); finT(); } /* the last note is still settling: send it now, never drop it */ clearTimeout(graceT); graceT=null; const g=++gen; want=true; hold=!!isHold; ui.setOn(true); tr('begin',isHold?'hold':'tap');
     try{ const p=await SR.requestPermissions(); if(p && p.speechRecognition && p.speechRecognition!=='granted'){ if(g===gen){ want=false; ui.setOn(false); } ui.toast && ui.toast('Microphone not allowed'); return; } }catch(e){}
     if(g!==gen || !want) return;
     try{ SR.removeAllListeners && await SR.removeAllListeners(); }catch(e){}
     if(g!==gen || !want) return;
-    orig=ui.getText(); base=norm(orig); cur=''; last=''; empty=0;
+    orig=ui.getText(); base=norm(orig); cur=''; last=''; empty=0; segmented=false;
     SR.addListener('partialResults', onPartial);
-    SR.addListener('listeningState', d=>{ tr('state',d&&d.status); if(g!==gen || !d || d.status!=='stopped') return;
+    SR.addListener('listeningState', d=>{ tr('state',d&&d.status); if(g!==gen || !d) return;
+      if(d.status==='ended'){ ended(); return; } /* end of a segmented session */
+      if(d.status!=='stopped' || segmented) return; /* inside a segmented session a pause is not the end */
       if(Date.now()-startedAt<opt.staleMs){ tr('stale-stop'); return; } /* the previous session's "stopped", delivered after the restart */
       ended(); });
     start(); pollT=setTimeout(poll, opt.pollMs); }

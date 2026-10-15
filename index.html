@@ -302,6 +302,14 @@ body[data-pane="0"] #restEl, body[data-pane="2"] #restEl, body.drawer-open #rest
 #tview{position:fixed;inset:0;z-index:96;background:#000;display:none;place-items:center}
 #tview.on{display:grid}
 #tview img{max-width:100%;max-height:100%;object-fit:contain}
+#chatbar{position:relative} /* v9.8: anchor for the recording bar + lock pill (beats .panebody .chatbar{position:static}) */
+.chatbar .vrec{position:absolute;left:8px;right:8px;bottom:calc(100% + 6px);height:36px;border-radius:18px;background:var(--raised);border:1px solid var(--line2);display:flex;align-items:center;gap:10px;padding:0 14px;z-index:5;font-family:var(--mono);font-size:13px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.chatbar .vrec[hidden],.chatbar .vlock[hidden]{display:none}
+.chatbar .vdot{width:10px;height:10px;border-radius:50%;background:var(--red);animation:pulse 1s infinite;flex:none}
+.chatbar .vhint{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap;transition:transform .05s linear}
+.chatbar .vlock{position:absolute;bottom:calc(100% + 50px);width:40px;padding:8px 0;border-radius:20px;background:var(--raised);border:1px solid var(--line2);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:16px;z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.chatbar .vlock span{color:var(--muted);font-size:12px;animation:pulse 1.2s infinite}
+.chatbar .mic{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .chatbar .mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(214,101,90,.5)}50%{box-shadow:0 0 0 10px rgba(214,101,90,0)}}
 .chatstat{display:flex;gap:10px;font-family:var(--mono);font-size:12px;color:var(--muted);padding:0 0 8px}
@@ -1010,7 +1018,7 @@ function tasksBroadcast(){ try{ if(TASK_BC) TASK_BC.postMessage({t:'tasks', at:D
 function tasksOnRemote(){ clearTimeout(TASK_RX_T); TASK_RX_T=setTimeout(()=>{ if(!state.tasks || !TASK_SNAP) return; const disk=LS.get('tasks',null); if(!disk || !Array.isArray(disk.items)) return;
   tasksStamp(); const before=notesSig(); tasksAdoptMem(tasksMerge(state.tasks, disk)); if(notesSig()!==before) tasksRefreshUI(); }, 40); }
 // a text field where he is editing a note (the edit dialog, the journal dialog, anything but the chat box, whose draft renderNotesPane already keeps)
-function tasksEditing(){ const ae=document.activeElement; if(ae && ae.id==='chatIn' && ae.value.trim()) return true; /* v8.6: typing a note = no rebuild until blur (the rebuild made the page jump) */ if(!ae || !/^(INPUT|TEXTAREA)$/.test(ae.tagName) || ae.id==='chatIn') return false; return !!(ae.closest && (ae.closest('#modal') || ae.closest('#notesBody') || ae.closest('#pageBody'))); }
+function tasksEditing(){ if(MIC && MIC.busy) return true; /* v9.8: dictating */ const ae=document.activeElement; if(ae && ae.id==='chatIn' && ae.value.trim()) return true; /* v8.6: typing a note = no rebuild until blur (the rebuild made the page jump) */ if(!ae || !/^(INPUT|TEXTAREA)$/.test(ae.tagName) || ae.id==='chatIn') return false; return !!(ae.closest && (ae.closest('#modal') || ae.closest('#notesBody') || ae.closest('#pageBody'))); }
 function tasksRefreshUI(){ clearTimeout(TASK_UI_T); TASK_UI_T=setTimeout(()=>{
   if(tasksEditing()){ if(!TASK_UI_WAIT){ TASK_UI_WAIT=true; const h=TASK_UI_H=()=>{ document.removeEventListener('focusout',h,true); TASK_UI_H=null; setTimeout(()=>{ TASK_UI_WAIT=false; tasksRefreshUI(); },80); }; document.addEventListener('focusout',h,true); } return; }
   try{ updateChatBadge(); if(PAGER.idx===0) renderNotesPane(true); const top=[...LAYERS].reverse().find(l=>l.kind==='page'); if($('#page').classList.contains('open') && top && top.data && top.data.kind==='journal' && !$('#modal').classList.contains('on')) renderPage('journal'); }catch(e){ console.warn('notes refresh',e); } }, 30); }
@@ -1109,7 +1117,7 @@ function pageNotes(B,T,A){
     if(t.shine && t.done_at && !showOpen) html+=`<div class="coach ${t.shine.big?'big':''}">${esc(t.shine.text)}</div>`; });
   if(!shown.length) html+=`<div class="empty">Type anything below. Starts with a dash or "note:" and it stays a note; everything else becomes a task with a box to tick.</div>`;
   html+='</div>';
-  html+=`<div class="chatbar" id="chatbar"><div class="att" id="chatAtt" hidden><img id="chatAttImg" alt=""><button id="chatAttX">Remove</button></div><button class="clip" id="chatClip" aria-label="Attach a photo">＋</button><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · hold ▲ = journal)" enterkeyhint="send" autocapitalize="sentences"></textarea><button class="mic" id="chatMic" aria-label="Speak" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
+  html+=`<div class="chatbar" id="chatbar"><div class="att" id="chatAtt" hidden><img id="chatAttImg" alt=""><button id="chatAttX">Remove</button></div><button class="clip" id="chatClip" aria-label="Attach a photo">＋</button><textarea id="chatIn" rows="1" placeholder="Message yourself… (task · ‑ note · hold ▲ = journal)" enterkeyhint="send" autocapitalize="sentences"></textarea><div class="vrec" id="vrec" hidden><span class="vdot"></span><span id="vrecT">0:00</span><span class="vhint" id="vrecHint">‹ Slide to cancel</span></div><div class="vlock" id="vlock" hidden>🔒<span>⌃</span></div><button class="mic" id="chatMic" aria-label="Hold to talk" hidden>🎙</button><button class="send" id="chatSend" disabled>▲</button></div>`;
   const barAt=html.lastIndexOf('<div class="chatbar"'); html='<div class="chatscroll" id="chatScroll">'+html.slice(0,barAt)+'</div>'+html.slice(barAt);
   B.innerHTML=html;
   const ta=$('#chatIn'), sb=$('#chatSend'); const grow=()=>{ const P=$('#chatScroll'); const y=P?P.scrollTop:0; const atB=P?(P.scrollHeight-P.scrollTop-P.clientHeight<40):false; const prev=ta.style.height; let h='44px'; if(ta.value){ ta.style.height='auto'; h=Math.max(44, Math.min(120, ta.scrollHeight))+'px'; } /* v8.9: empty = one line; measuring an empty box measured the placeholder */ ta.style.height=h; if(P && h!==prev){ if(atB) P.scrollTop=P.scrollHeight; else P.scrollTop=y; } sb.disabled=!ta.value.trim() && !att; }; /* v8.6: the old 44px collapse on every key made the list jump on desktop */ ta.oninput=grow;
@@ -1130,25 +1138,30 @@ function pageNotes(B,T,A){
   $('#chatFile').onchange=e=>{ const f=e.target.files && e.target.files[0]; if(f) attachFile(f); };
   showAtt();
   let holdT=null, held=false, sawPtr=false; sb.onpointerdown=e=>{ e.preventDefault(); sawPtr=true; held=false; clearTimeout(holdT); holdT=setTimeout(()=>{ held=true; buzz('double'); send('journal'); }, 550); }; const rel=()=>{ clearTimeout(holdT); if(!held){ send(); } held=false; }; sb.onpointerup=rel; sb.onpointercancel=()=>{ clearTimeout(holdT); held=false; }; sb.onpointerleave=()=>{ clearTimeout(holdT); }; sb.onclick=e=>{ e.preventDefault(); if(!sawPtr) send(); sawPtr=false; }; const jl=$('#jLink'); if(jl) jl.onclick=()=>openPage('journal'); const ll=$('#lLink'); if(ll) ll.onclick=()=>openPage('later');
-  // voice → text on the phone: Android's own speech recogniser (free), partial results stream into the box, tap again to stop
+  // voice → text on the phone: Android's own speech recogniser (free). v9.8: HOLD the mic = listen while held (through pauses);
+  // a quick TAP = keep listening until tapped again. One app-wide session (MIC), so a notes redraw never orphans it.
   const SR=isNative() && Capacitor.Plugins && Capacitor.Plugins.SpeechRecognition; const mic=$('#chatMic');
   if(SR){ SR.available().then(r=>{ if(r && r.available) mic.hidden=false; }).catch(()=>{});
-    // one utterance per tap. The plugin says "stopped" at end-of-speech, but the FINAL transcript arrives after that (as one more
-    // partialResults event) — so after "stopped" we keep the text open for a grace window instead of closing at once.
-    let mode='off', base='', cur='', grace=null; const setL=v=>{ mic.classList.toggle('on',v); mic.textContent=v?'■':'🎙'; };
-    const norm=x=>(x||'').trim().replace(/\s+/g,' ');
-    const paint=()=>{ ta.value=norm((base?base+' ':'')+cur); grow(); };
-    const seal=()=>{ clearTimeout(grace); if(mode==='off') return; mode='off'; setL(false); paint(); cur=''; };
-    voiceSeal=()=>{ if(mode!=='off'){ seal(); try{ SR.stop(); }catch(e){} } };
-    const closing=()=>{ if(mode!=='on') return; mode='closing'; setL(false); clearTimeout(grace); grace=setTimeout(seal, 2500); };
-    mic.onclick=async()=>{ if(mode==='on'){ closing(); try{ await SR.stop(); }catch(e){} return; }
-      seal();
-      try{ const perm=await SR.requestPermissions(); if(perm && perm.speechRecognition && perm.speechRecognition!=='granted'){ toast('Microphone not allowed'); return; } }catch(e){}
-      try{ SR.removeAllListeners && await SR.removeAllListeners(); }catch(e){}
-      base=norm(ta.value); cur=''; mode='on'; setL(true);
-      SR.addListener('partialResults', d=>{ if(mode==='off') return; const m=norm((d&&d.matches&&d.matches[0])||''); if(!m) return; if(m.length>=cur.length || mode==='closing' || !cur.toLowerCase().startsWith(m.toLowerCase())) cur=m; paint(); });
-      SR.addListener('listeningState', d=>{ if(d && d.status==='stopped') closing(); });
-      try{ await SR.start({language:'en-IN', maxResults:1, partialResults:true, popup:false}); }catch(e){ closing(); } };
+    if(!MIC) MIC=micSession(SR, { getText:()=>{ const t=$('#chatIn'); return t?t.value:''; },
+      setText:v=>{ const t=$('#chatIn'); if(t){ t.value=v; t.dispatchEvent(new Event('input')); } },
+      setOn:v=>{ const m=$('#chatMic'); if(m){ m.classList.toggle('on',v); m.textContent=v?'■':'🎙'; } if(v) buzz('buzz'); else if(MICUI.state!=='idle') micRec(false); },
+      toast });
+    mic.classList.toggle('on',MIC.on); mic.textContent=MIC.on?'■':'🎙';
+    voiceSeal=()=>{ if(MICUI.state!=='idle') micRec(false); MIC.seal(); };
+    /* v9.8, the WhatsApp / Telegram gesture: hold = talk, release = send, slide left = cancel, slide up = lock (hands-free, tap ■ to send) */
+    let downAt=0, x0=0, y0=0;
+    const sendIt=()=>{ micRec(false); MIC.stop('', ()=>{ const t=$('#chatIn'); if(t && t.value.trim()) send(); else toast("Didn't catch that"); }); };
+    mic.onpointerdown=e=>{ e.preventDefault(); if(MICUI.state==='locked'){ sendIt(); return; } if(MICUI.state!=='idle') return;
+      try{ mic.setPointerCapture(e.pointerId); }catch(_){} downAt=Date.now(); x0=e.clientX; y0=e.clientY; MICUI.state='hold'; MIC.begin(true); micRec(true); MICUI.state='hold'; };
+    mic.onpointermove=e=>{ if(MICUI.state!=='hold') return; const dx=e.clientX-x0, dy=e.clientY-y0, h=$('#vrecHint');
+      if(h) h.style.transform='translateX('+Math.min(0,dx)+'px)';
+      if(dx<-90){ MIC.cancel(); micRec(false); buzz('double'); toast('Cancelled'); }
+      else if(dy<-70){ MICUI.state='locked'; MIC.setHold(false); buzz('buzz'); const l=$('#vlock'); if(l) l.hidden=true; if(h){ h.textContent='Locked. Tap ■ to send'; h.style.transform=''; } } };
+    mic.onpointerup=e=>{ e.preventDefault(); if(MICUI.state!=='hold') return;
+      if(Date.now()-downAt<MIC_HOLD_MS){ MIC.cancel(); micRec(false); toast('Hold to talk, release to send. Slide up to lock'); return; }
+      sendIt(); };
+    mic.onpointercancel=()=>{ if(MICUI.state==='hold'){ micRec(false); MIC.stop(); } }; /* the system took the touch: keep the words in the box, don't send */
+    mic.oncontextmenu=e=>e.preventDefault(); mic.onclick=e=>e.preventDefault();
   }
   [...B.querySelectorAll('[data-tick]')].forEach(b=>b.onclick=()=>toggleTask(b.dataset.tick, B,T,A));
   loadTaskImgs(B); [...B.querySelectorAll('img[data-timg]')].forEach(ti=>ti.onclick=e=>{ e.stopPropagation(); if(ti.src) viewTaskImg(ti.src); });
@@ -1609,6 +1622,56 @@ function setDetail(id){
 /* alerts: vibration patterns, beep, system notification */
 const VIB={buzz:[120], double:[80,60,80], long:[400], heartbeat:[60,40,60,180,60,40,60], triple:[70,50,70,50,70], off:[]};
 function alertSettings(){ const a=Object.assign({pattern:'double', pr:'heartbeat', restSound:'chime', prSound:'fanfare', notify:false}, state.settings.alerts||{}); if(a.sound===false && !state.settings.alerts.restSound) a.restSound='none'; return a; }
+/* v9.8: voice dictation without the one-sentence limit. Android's recogniser ends every utterance at a pause: either
+   onEndOfSpeech ("stopped" event, the final text arrives AFTER it as one more partialResults event) or a silent timeout that
+   only flips isListening() to false (the plugin rejects an already-resolved call, so JS never hears that one). While the
+   user still wants to talk (finger down, or tapped on), each ended utterance is committed and the recogniser restarts.
+   Pure logic, no DOM: unit-tested by tools/gymapp/test_mic.js. */
+let MIC=null; const MIC_HOLD_MS=300; const MICUI={state:'idle', tick:null}; /* state: idle | hold | locked */
+function micRec(on){ const r=$('#vrec'), l=$('#vlock'), t=$('#vrecT'), h=$('#vrecHint'); clearInterval(MICUI.tick);
+  if(!on){ MICUI.state='idle'; if(r) r.hidden=true; if(l) l.hidden=true; return; }
+  if(h){ h.textContent='‹ Slide to cancel'; h.style.transform=''; } if(r) r.hidden=false;
+  const place=()=>{ const m=$('#chatMic'), cb=$('#chatbar'); if(l && m && cb){ const a=m.getBoundingClientRect(), b=cb.getBoundingClientRect(); if(a.width) l.style.left=Math.max(0,a.left-b.left+a.width/2-20)+'px'; } }; if(l){ l.hidden=false; place(); }
+  const t0=Date.now(), upd=()=>{ const s=Math.floor((Date.now()-t0)/1000); if(t) t.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); place(); }; upd(); MICUI.tick=setInterval(upd,500); }
+function micSession(SR, ui, opt){
+  opt=Object.assign({restartMs:600, graceMs:2500, settleMs:400, pollMs:800, minLiveMs:1200, maxEmpty:4, lang:'en-IN'}, opt||{});
+  const norm=x=>(x||'').trim().replace(/\s+/g,' ');
+  let want=false, hold=false, live=false, base='', cur='', last='', orig='', finT=null, restartT=null, graceT=null, pollT=null, startedAt=0, empty=0, gotText=false, gen=0;
+  const paint=()=>ui.setText(norm((base?base+' ':'')+cur));
+  const commit=()=>{ if(cur){ base=norm((base?base+' ':'')+cur); last=cur; cur=''; } paint(); };
+  const onPartial=d=>{ if(!want && !graceT) return; const m=norm(d&&d.matches&&d.matches[0]); if(!m) return;
+    if(!cur && last && last.toLowerCase().startsWith(m.toLowerCase())) return; /* a late final of the utterance already committed */
+    if(m.length>=cur.length || !want || !cur.toLowerCase().startsWith(m.toLowerCase())) cur=m; gotText=true; paint();
+    if(!want && graceT && finT){ clearTimeout(graceT); graceT=setTimeout(finT, opt.settleMs); } /* the final landed: finish soon, not after the full grace */ };
+  const start=async()=>{ gotText=false; live=true; startedAt=Date.now();
+    try{ await SR.start({language:opt.lang, maxResults:1, partialResults:true, popup:false}); }catch(e){ ended(); } };
+  const ended=()=>{ live=false; if(!want || restartT) return;
+    restartT=setTimeout(()=>{ restartT=null; commit(); if(!want) return;
+      if(gotText) empty=0; else if(!hold && ++empty>=opt.maxEmpty){ stop('silence'); return; }
+      start(); }, opt.restartMs); };
+  const poll=async()=>{ const g=gen; if(!want) return;
+    if(live && !restartT && Date.now()-startedAt>=opt.minLiveMs){ try{ const r=await SR.isListening(); if(g===gen && want && live && !restartT && r && r.listening===false) ended(); }catch(e){} }
+    if(g===gen && want) pollT=setTimeout(poll, opt.pollMs); };
+  const clear=()=>{ clearTimeout(restartT); restartT=null; clearTimeout(pollT); pollT=null; };
+  async function begin(isHold){ if(want) return; clearTimeout(graceT); graceT=null; const g=++gen; want=true; hold=!!isHold; ui.setOn(true);
+    try{ const p=await SR.requestPermissions(); if(p && p.speechRecognition && p.speechRecognition!=='granted'){ if(g===gen){ want=false; ui.setOn(false); } ui.toast && ui.toast('Microphone not allowed'); return; } }catch(e){}
+    if(g!==gen || !want) return;
+    try{ SR.removeAllListeners && await SR.removeAllListeners(); }catch(e){}
+    if(g!==gen || !want) return;
+    orig=ui.getText(); base=norm(orig); cur=''; last=''; empty=0;
+    SR.addListener('partialResults', onPartial);
+    SR.addListener('listeningState', d=>{ if(g===gen && d && d.status==='stopped') ended(); });
+    start(); pollT=setTimeout(poll, opt.pollMs); }
+  function stop(reason, cb){ if(!want) return; want=false; gen++; const pending=!!restartT; clear(); ui.setOn(false); try{ SR.stop(); }catch(e){}
+    if(reason==='silence' && ui.toast) ui.toast('Stopped listening: no speech');
+    finT=()=>{ graceT=null; finT=null; commit(); cb && cb(); };
+    if(pending){ finT(); return; } /* the utterance had already ended and its final is in */
+    graceT=setTimeout(finT, opt.graceMs); }
+  function cancel(){ const was=want||!!graceT; want=false; gen++; clear(); clearTimeout(graceT); graceT=null; finT=null;
+    if(was){ ui.setOn(false); try{ SR.stop(); }catch(e){} cur=''; last=''; ui.setText(orig); } }
+  function seal(){ const was=want||!!graceT; want=false; gen++; clear(); clearTimeout(graceT); graceT=null; finT=null; if(was){ ui.setOn(false); try{ SR.stop(); }catch(e){} commit(); } }
+  return { begin, stop, cancel, seal, setHold:v=>{ hold=!!v; }, get on(){ return want; }, get busy(){ return want || !!graceT; } };
+}
 function buzz(name){ const p=VIB[name]||[]; if(p.length && navigator.vibrate) navigator.vibrate(p); }
 // synthesized sounds: [delay s, frequency Hz, length s, wave] notes
 const SOUNDS={

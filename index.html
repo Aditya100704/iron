@@ -708,6 +708,12 @@ document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==
 window.addEventListener('focus',()=>{ tasksOnRemote(); tasksPull(); });
 setInterval(()=>{ if(document.visibilityState==='visible') tasksPull(); }, 30000);
 window.addEventListener('offline',()=>{state.online=false; setStatus('off','offline');});
+/* v10.1 (his order 2026-11-05: "make the iron app auto refresh at 12 am every day to refresh the day"): at midnight, and whenever the app comes back on a new day, it drops yesterday's view, re-reads today and syncs. A session still running past midnight is left alone. */
+let DAY_SEEN = todayISO();
+function dayRollover(){ const t=todayISO(); if(t===DAY_SEEN) return; DAY_SEEN=t; state.viewDate=null; if(!state.session || state.session.date===t) state.viewDay=null; try{ autoFinishSession(); }catch(e){} render(); if(navigator.onLine) fullSync(); }
+function armMidnight(){ const n=new Date(); const next=new Date(n.getFullYear(), n.getMonth(), n.getDate()+1, 0, 0, 5); setTimeout(()=>{ dayRollover(); armMidnight(); }, next-n); }
+armMidnight(); setInterval(dayRollover, 60000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') dayRollover(); });
 
 /* ================= DOMAIN ================= */
 const activePlan = () => state.plans.find(p=>p.active) || state.plans[0] || {id:DEFAULT_PLAN.id,name:DEFAULT_PLAN.name,data:DEFAULT_PLAN,active:true};
